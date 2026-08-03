@@ -1,0 +1,48 @@
+{
+  "name": "@opengamesonline/sevens",
+  "version": "0.1.0",
+  "description": "Functional game engine for the card game Sevens.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "clean": "bun -e \"import { rm } from 'node:fs/promises'; await rm('dist', { recursive: true, force: true })\"",
+    "build": "bun run clean && bunx tsc -p tsconfig.build.json && bun run smoke:package",
+    "smoke:package": "bun -e \"await import('./dist/index.js')\" && node -e \"await import('./dist/index.js')\"",
+    "typecheck": "bunx tsc -p tsconfig.json --noEmit",
+    "test": "bun test",
+    "test:coverage": "bun test --coverage",
+    "prepack": "bun run build"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.13",
+    "typescript": "~6.0.3"
+  },
+  "keywords": [
+    "cards",
+    "game",
+    "sevens",
+    "typescript"
+  ],
+  "author": "Open Games Online",
+  "license": "AGPL-3.0-only",
+  "packageManager": "bun@1.3.13",
+  "publishConfig": {
+    "access": "public"
+  }
+}

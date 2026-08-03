@@ -1,0 +1,4 @@
+[submodule "submodules/expo-lan"]
+	path = submodules/expo-lan
+	url = ../expo-lan
+	branch = init
