@@ -20,6 +20,7 @@ describe("initializeSevens", () => {
     expect(openingPlayer).toBeDefined();
     expect(game.currentPlayerId).toBe(openingPlayer!.id);
     expect(game.status).toBe(GameStatus.Active);
+    expect(game.pendingDraw).toBeNull();
     expect(game.winnerId).toBeNull();
     expect(ids).toEqual(["alice", "bob", "carol"]);
   });

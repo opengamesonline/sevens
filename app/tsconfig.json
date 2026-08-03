@@ -2,12 +2,28 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "types": [
+      "node",
+      "react"
+    ],
     "paths": {
       "@/*": [
         "./src/*"
       ],
       "@/assets/*": [
         "./assets/*"
+      ],
+      "@opengamesonline/sevens": [
+        "../library/src/index.ts"
+      ],
+      "@opengamesonline/expo-lan-sockets": [
+        "../submodules/expo-lan/expo-lan-sockets/src/index.ts"
+      ],
+      "@opengamesonline/expo-lan-multiplayer": [
+        "../submodules/expo-lan/expo-lan-multiplayer/src/index.ts"
+      ],
+      "expo": [
+        "./node_modules/expo"
       ]
     }
   },

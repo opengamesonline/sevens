@@ -4,7 +4,7 @@ import {
   GameStatus,
   TurnActionType,
   type Card,
-  type DrawAction,
+  type GiveCardAction,
   type PlayAction,
   type PlayerState,
   type SevensGameObject,
@@ -29,12 +29,16 @@ function getRightPlayerId(players: readonly PlayerState[], playerIndex: number):
   return players[(playerIndex - 1 + players.length) % players.length]!.id;
 }
 
-function validatePlay(game: SevensGameObject, action: PlayAction): SevensGameObject | null {
-  if (action.playerId !== game.currentPlayerId) {
+function validatePlay(
+  game: SevensGameObject,
+  actorId: string,
+  action: PlayAction,
+): SevensGameObject | null {
+  if (actorId !== game.currentPlayerId) {
     return null;
   }
 
-  const playerIndex = game.players.findIndex(({ id }) => id === action.playerId);
+  const playerIndex = game.players.findIndex(({ id }) => id === actorId);
   const player = game.players[playerIndex];
   if (player === undefined) {
     return null;
@@ -65,19 +69,50 @@ function validatePlay(game: SevensGameObject, action: PlayAction): SevensGameObj
   };
 }
 
-function validateDraw(game: SevensGameObject, action: DrawAction): SevensGameObject | null {
-  if (action.playerId !== game.currentPlayerId) {
+function validateRequestDraw(
+  game: SevensGameObject,
+  actorId: string,
+): SevensGameObject | null {
+  if (actorId !== game.currentPlayerId) {
     return null;
   }
 
-  const playerIndex = game.players.findIndex(({ id }) => id === action.playerId);
-  if (playerIndex === -1 || action.fromPlayerId !== getRightPlayerId(game.players, playerIndex)) {
+  const requesterIndex = game.players.findIndex(({ id }) => id === actorId);
+  if (requesterIndex === -1) {
     return null;
   }
 
-  const donor = game.players.find(({ id }) => id === action.fromPlayerId);
-  const currentPlayer = game.players[playerIndex];
-  if (donor === undefined || currentPlayer === undefined) {
+  return {
+    ...game,
+    pendingDraw: {
+      requesterId: actorId,
+      donorId: getRightPlayerId(game.players, requesterIndex),
+    },
+  };
+}
+
+function validateGiveCard(
+  game: SevensGameObject,
+  actorId: string,
+  action: GiveCardAction,
+): SevensGameObject | null {
+  const pendingDraw = game.pendingDraw;
+  if (pendingDraw === null || actorId !== pendingDraw.donorId) {
+    return null;
+  }
+
+  const requesterIndex = game.players.findIndex(({ id }) => id === pendingDraw.requesterId);
+  if (
+    requesterIndex === -1 ||
+    pendingDraw.requesterId !== game.currentPlayerId ||
+    pendingDraw.donorId !== getRightPlayerId(game.players, requesterIndex)
+  ) {
+    return null;
+  }
+
+  const donor = game.players.find(({ id }) => id === actorId);
+  const requester = game.players[requesterIndex];
+  if (donor === undefined || requester === undefined) {
     return null;
   }
 
@@ -90,7 +125,7 @@ function validateDraw(game: SevensGameObject, action: DrawAction): SevensGameObj
     if (player.id === donor.id) {
       return { ...player, hand: donorHand };
     }
-    if (player.id === currentPlayer.id) {
+    if (player.id === requester.id) {
       return { ...player, hand: [...player.hand, action.card] };
     }
     return player;
@@ -100,16 +135,16 @@ function validateDraw(game: SevensGameObject, action: DrawAction): SevensGameObj
   return {
     ...game,
     players,
+    pendingDraw: null,
     status: hasWinner ? GameStatus.Finished : GameStatus.Active,
-    currentPlayerId: hasWinner
-      ? game.currentPlayerId
-      : getNextPlayerId(game.players, playerIndex),
+    currentPlayerId: getNextPlayerId(game.players, requesterIndex),
     winnerId: hasWinner ? donor.id : null,
   };
 }
 
 export function validateTurn(
   game: SevensGameObject,
+  actorId: string,
   action: TurnAction,
 ): SevensGameObject | null {
   if (game.status !== GameStatus.Active) {
@@ -118,9 +153,11 @@ export function validateTurn(
 
   switch (action.type) {
     case TurnActionType.Play:
-      return validatePlay(game, action);
-    case TurnActionType.Draw:
-      return validateDraw(game, action);
+      return game.pendingDraw === null ? validatePlay(game, actorId, action) : null;
+    case TurnActionType.RequestDraw:
+      return game.pendingDraw === null ? validateRequestDraw(game, actorId) : null;
+    case TurnActionType.GiveCard:
+      return validateGiveCard(game, actorId, action);
     default:
       return null;
   }

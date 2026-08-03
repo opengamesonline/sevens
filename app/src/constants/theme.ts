@@ -3,8 +3,6 @@
  * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
  */
 
-import '@/global.css';
-
 import { Platform } from 'react-native';
 
 export const Colors = {
@@ -63,3 +61,31 @@ export const Spacing = {
 
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
 export const MaxContentWidth = 800;
+
+export const GameColors = {
+  felt: '#073F32',
+  feltDeep: '#042B23',
+  feltLight: '#0D5744',
+  cream: '#F6F0DF',
+  creamMuted: '#DED4BC',
+  ink: '#171A18',
+  inkMuted: '#5D625D',
+  gold: '#D7AE5A',
+  goldDark: '#987637',
+  red: '#B63B3F',
+  blackSuit: '#202522',
+  white: '#FFFDF6',
+  whiteMuted: '#B9C9C1',
+  border: 'rgba(246, 240, 223, 0.18)',
+  panel: 'rgba(3, 36, 29, 0.82)',
+  panelSolid: '#0A382D',
+  danger: '#D56B62',
+  shadow: '#00130F',
+} as const;
+
+export const GameCardSize = {
+  width: 104,
+  height: 148,
+  compactWidth: 40,
+  compactHeight: 56,
+} as const;

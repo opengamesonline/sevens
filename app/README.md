@@ -1,56 +1,35 @@
-# Welcome to your Expo app 👋
+# Sevens App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+## Development Client
 
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+Initialize the local LAN package, build the Bun game library, then install the app dependencies:
 
 ```bash
-npm run reset-project
+git submodule update --init --recursive
+cd library && bun install && bun run build
+cd ../app && npm install --ignore-scripts
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Create a local development build:
 
-### Other setup steps
+```bash
+npm run android
+# or
+npm run ios
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+After the development client is installed, start Metro on the LAN with `npm start`. Use `npm run android:device` to select a physical Android device.
 
-## Learn more
+Native dependency or app configuration changes require rebuilding the development client.
 
-To learn more about developing your project with Expo, look at the following resources:
+## Emulator Bridge
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+Android emulators advertise LAN games on their virtual networks. To expose those games to an iOS simulator or device on the Mac's network, start the bridge in a separate terminal:
 
-## Join the community
+```bash
+npm run bridge
+```
 
-Join our community of developers creating universal apps.
+Leave it running, create a game on an Android emulator, then select the service marked `[bridge emulator-...]` on iOS. The bridge requires `adb` on `PATH` and also starts the Expo LAN dev server.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Run `npm run test:bridge` to test the bridge helpers and `npm run check` to type-check the app.

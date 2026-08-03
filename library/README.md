@@ -52,29 +52,30 @@ The standard variant requires the seven of diamonds as the opening card. After t
 ```ts
 import { TurnActionType, validateTurn } from "@opengamesonline/sevens";
 
-const nextGame = validateTurn(game, {
+const nextGame = validateTurn(game, game.currentPlayerId, {
   type: TurnActionType.Play,
-  playerId: game.currentPlayerId,
   card: playableCards[0]!,
 });
 ```
 
-`validateTurn` returns a new game object for a valid action and `null` for an invalid action. A play is valid only when it comes from the current player, the card is in that player's hand, and the variant marks it as playable.
+`validateTurn` receives the acting player ID separately from the action. It returns a new game object for a valid action and `null` for an invalid action. A play is valid only when the actor is the current player, the card is in that player's hand, and the variant marks it as playable.
 
 ## Validate a draw
 
-When drawing, the player on the current player's right chooses a card from their own hand. In seating order, the player on the right is the previous player with wraparound. Selection and authorization of that choice happen outside this package; the selected card is included in the action.
+A draw has two actor-aware steps. The current player requests a draw, then the player on their right chooses and gives a card from their own hand. In seating order, the player on the right is the previous player with wraparound.
 
 ```ts
-const nextGame = validateTurn(game, {
-  type: TurnActionType.Draw,
-  playerId: game.currentPlayerId,
-  fromPlayerId: "carol",
+const pendingGame = validateTurn(game, game.currentPlayerId, {
+  type: TurnActionType.RequestDraw,
+});
+
+const nextGame = validateTurn(pendingGame!, pendingGame!.pendingDraw!.donorId, {
+  type: TurnActionType.GiveCard,
   card: selectedCard,
 });
 ```
 
-A draw is allowed even if the current player has a playable card. The package still verifies that the donor is the player on the right and owns the selected card. Drawing ends the current turn.
+A draw request is allowed even if the current player has a playable card. While it is pending, plays and new draw requests are rejected. Only the derived donor can give a card, and that card must be in the donor's hand. Giving transfers the card to the requester, clears the pending draw, and advances from the requester to the next seat.
 
 ## State model
 
@@ -85,11 +86,12 @@ A draw is allowed even if the current player has a playable card. The package st
 - Per-suit board bounds with `min` and `max` ranks.
 - Players in seating order and every player's current hand.
 - The current player ID.
+- A pending draw with requester and donor IDs, or `null`.
 - The winner ID after completion.
 
 Cards use the `Suit` and `Rank` enums. Rank is numeric from `Rank.Ace` (`1`) through `Rank.King` (`13`), making board adjacency explicit while retaining enum names in TypeScript.
 
-The first player whose hand becomes empty wins. This includes a player whose final card is taken by a draw. Finished games reject all subsequent actions.
+The first player whose hand becomes empty wins. This includes a donor who gives their final card. Finished games reject all subsequent actions.
 
 ## Variants
 

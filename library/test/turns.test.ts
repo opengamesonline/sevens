@@ -25,6 +25,7 @@ function createGame(overrides: Partial<SevensGameObject> = {}): SevensGameObject
       { id: "carol", hand: [card(Suit.Spades, Rank.Seven), card(Suit.Clubs, Rank.Ace)] },
     ],
     currentPlayerId: "alice",
+    pendingDraw: null,
     winnerId: null,
     ...overrides,
   };
@@ -34,9 +35,8 @@ describe("play actions", () => {
   test("plays a valid card and advances without mutating the game", () => {
     const game = createGame();
     const snapshot = structuredClone(game);
-    const result = validateTurn(game, {
+    const result = validateTurn(game, "alice", {
       type: TurnActionType.Play,
-      playerId: "alice",
       card: sevenOfDiamonds,
     });
 
@@ -55,9 +55,8 @@ describe("play actions", () => {
       ],
       currentPlayerId: "carol",
     });
-    const result = validateTurn(game, {
+    const result = validateTurn(game, "carol", {
       type: TurnActionType.Play,
-      playerId: "carol",
       card: sevenOfDiamonds,
     });
 
@@ -77,14 +76,12 @@ describe("play actions", () => {
       ],
     });
 
-    const afterAce = validateTurn(game, {
+    const afterAce = validateTurn(game, "alice", {
       type: TurnActionType.Play,
-      playerId: "alice",
       card: card(Suit.Clubs, Rank.Ace),
     });
-    const afterKing = validateTurn(afterAce!, {
+    const afterKing = validateTurn(afterAce!, "bob", {
       type: TurnActionType.Play,
-      playerId: "bob",
       card: card(Suit.Clubs, Rank.King),
     });
 
@@ -96,23 +93,20 @@ describe("play actions", () => {
     const game = createGame();
 
     expect(
-      validateTurn(game, {
+      validateTurn(game, "bob", {
         type: TurnActionType.Play,
-        playerId: "bob",
         card: card(Suit.Hearts, Rank.Seven),
       }),
     ).toBeNull();
     expect(
-      validateTurn(game, {
+      validateTurn(game, "alice", {
         type: TurnActionType.Play,
-        playerId: "alice",
         card: card(Suit.Diamonds, Rank.Six),
       }),
     ).toBeNull();
     expect(
-      validateTurn(game, {
+      validateTurn(game, "alice", {
         type: TurnActionType.Play,
-        playerId: "alice",
         card: card(Suit.Clubs, Rank.Two),
       }),
     ).toBeNull();
@@ -126,27 +120,23 @@ describe("play actions", () => {
         { id: "carol", hand: [card(Suit.Spades, Rank.Seven)] },
       ],
     });
-    const result = validateTurn(game, {
+    const result = validateTurn(game, "alice", {
       type: TurnActionType.Play,
-      playerId: "alice",
       card: sevenOfDiamonds,
     });
 
     expect(result?.status).toBe(GameStatus.Finished);
     expect(result?.winnerId).toBe("alice");
     expect(
-      validateTurn(result!, {
-        type: TurnActionType.Draw,
-        playerId: "alice",
-        fromPlayerId: "carol",
-        card: card(Suit.Spades, Rank.Seven),
+      validateTurn(result!, "alice", {
+        type: TurnActionType.RequestDraw,
       }),
     ).toBeNull();
   });
 });
 
 describe("draw actions", () => {
-  test("keeps the forced opening after a draw on an empty board", () => {
+  test("keeps the forced opening after a two-step draw on an empty board", () => {
     const drawnCard = card(Suit.Clubs, Rank.Ace);
     const game = createGame({
       players: [
@@ -155,84 +145,110 @@ describe("draw actions", () => {
         { id: "carol", hand: [drawnCard, card(Suit.Spades, Rank.Seven)] },
       ],
     });
-    const result = validateTurn(game, {
-      type: TurnActionType.Draw,
-      playerId: "alice",
-      fromPlayerId: "carol",
+    const pending = validateTurn(game, "alice", { type: TurnActionType.RequestDraw });
+    const result = validateTurn(pending!, "carol", {
+      type: TurnActionType.GiveCard,
       card: drawnCard,
     });
 
     expect(result?.board).toEqual(createEmptyBoard());
     expect(
-      validateTurn(result!, {
+      validateTurn(result!, "bob", {
         type: TurnActionType.Play,
-        playerId: "bob",
         card: card(Suit.Hearts, Rank.Seven),
       }),
     ).toBeNull();
     expect(
-      validateTurn(result!, {
+      validateTurn(result!, "bob", {
         type: TurnActionType.Play,
-        playerId: "bob",
         card: sevenOfDiamonds,
       })?.board[Suit.Diamonds],
     ).toEqual({ min: Rank.Seven, max: Rank.Seven });
   });
 
-  test("draws from the player on the right even when a play is available", () => {
+  test("lets the current player request a draw even when a play is available", () => {
     const game = createGame();
     const snapshot = structuredClone(game);
-    const drawnCard = card(Suit.Clubs, Rank.Ace);
-    const result = validateTurn(game, {
-      type: TurnActionType.Draw,
-      playerId: "alice",
-      fromPlayerId: "carol",
-      card: drawnCard,
-    });
+    const pending = validateTurn(game, "alice", { type: TurnActionType.RequestDraw });
 
     expect(game).toEqual(snapshot);
-    expect(result?.players[0]?.hand).toContainEqual(drawnCard);
-    expect(result?.players[2]?.hand).not.toContainEqual(drawnCard);
-    expect(result?.currentPlayerId).toBe("bob");
-    expect(result?.board).toEqual(game.board);
+    expect(pending?.pendingDraw).toEqual({ requesterId: "alice", donorId: "carol" });
+    expect(pending?.currentPlayerId).toBe("alice");
+    expect(pending?.players).toEqual(game.players);
   });
 
-  test("uses the previous seat as the right-hand player without wraparound", () => {
+  test("uses the previous seat as the right-hand donor", () => {
     const game = createGame({ currentPlayerId: "bob" });
-    const result = validateTurn(game, {
-      type: TurnActionType.Draw,
-      playerId: "bob",
-      fromPlayerId: "alice",
+    const pending = validateTurn(game, "bob", { type: TurnActionType.RequestDraw });
+    const result = validateTurn(pending!, "alice", {
+      type: TurnActionType.GiveCard,
       card: sevenOfDiamonds,
     });
 
+    expect(pending?.pendingDraw?.donorId).toBe("alice");
     expect(result?.players[0]?.hand).not.toContainEqual(sevenOfDiamonds);
     expect(result?.players[1]?.hand).toContainEqual(sevenOfDiamonds);
     expect(result?.currentPlayerId).toBe("carol");
   });
 
-  test("rejects a non-right donor and a card the donor does not own", () => {
+  test("rejects requests by other actors and play or new requests while pending", () => {
     const game = createGame();
+    const pending = validateTurn(game, "alice", { type: TurnActionType.RequestDraw });
+
+    expect(validateTurn(game, "bob", { type: TurnActionType.RequestDraw })).toBeNull();
+    expect(
+      validateTurn(game, "carol", {
+        type: TurnActionType.GiveCard,
+        card: card(Suit.Clubs, Rank.Ace),
+      }),
+    ).toBeNull();
+    expect(
+      validateTurn(pending!, "alice", {
+        type: TurnActionType.Play,
+        card: sevenOfDiamonds,
+      }),
+    ).toBeNull();
+    expect(validateTurn(pending!, "alice", { type: TurnActionType.RequestDraw })).toBeNull();
+  });
+
+  test("only lets the derived donor give an owned card without mutating pending state", () => {
+    const pending = validateTurn(createGame(), "alice", {
+      type: TurnActionType.RequestDraw,
+    })!;
+    const snapshot = structuredClone(pending);
 
     expect(
-      validateTurn(game, {
-        type: TurnActionType.Draw,
-        playerId: "alice",
-        fromPlayerId: "bob",
+      validateTurn(pending, "bob", {
+        type: TurnActionType.GiveCard,
         card: card(Suit.Hearts, Rank.Seven),
       }),
     ).toBeNull();
     expect(
-      validateTurn(game, {
-        type: TurnActionType.Draw,
-        playerId: "alice",
-        fromPlayerId: "carol",
+      validateTurn(pending, "carol", {
+        type: TurnActionType.GiveCard,
         card: card(Suit.Hearts, Rank.Ace),
       }),
     ).toBeNull();
+    expect(pending).toEqual(snapshot);
   });
 
-  test("finishes with the donor as winner when their final card is drawn", () => {
+  test("transfers the card, clears pending, and advances from the requester", () => {
+    const game = createGame();
+    const drawnCard = card(Suit.Clubs, Rank.Ace);
+    const pending = validateTurn(game, "alice", { type: TurnActionType.RequestDraw })!;
+    const result = validateTurn(pending, "carol", {
+      type: TurnActionType.GiveCard,
+      card: drawnCard,
+    });
+
+    expect(result?.players[0]?.hand).toContainEqual(drawnCard);
+    expect(result?.players[2]?.hand).not.toContainEqual(drawnCard);
+    expect(result?.pendingDraw).toBeNull();
+    expect(result?.currentPlayerId).toBe("bob");
+    expect(result?.board).toEqual(game.board);
+  });
+
+  test("finishes with the donor as winner when they give their final card", () => {
     const drawnCard = card(Suit.Spades, Rank.Seven);
     const game = createGame({
       players: [
@@ -241,15 +257,16 @@ describe("draw actions", () => {
         { id: "carol", hand: [drawnCard] },
       ],
     });
-    const result = validateTurn(game, {
-      type: TurnActionType.Draw,
-      playerId: "alice",
-      fromPlayerId: "carol",
+    const pending = validateTurn(game, "alice", { type: TurnActionType.RequestDraw });
+    const result = validateTurn(pending!, "carol", {
+      type: TurnActionType.GiveCard,
       card: drawnCard,
     });
 
     expect(result?.status).toBe(GameStatus.Finished);
     expect(result?.winnerId).toBe("carol");
     expect(result?.players[2]?.hand).toEqual([]);
+    expect(result?.pendingDraw).toBeNull();
+    expect(result?.currentPlayerId).toBe("bob");
   });
 });

@@ -50,6 +50,7 @@ export function initializeSevens(
     board: createEmptyBoard(),
     players,
     currentPlayerId: openingPlayer.id,
+    pendingDraw: null,
     winnerId: null,
   };
 }

@@ -32,7 +32,8 @@ export enum GameStatus {
 
 export enum TurnActionType {
   Play = "play",
-  Draw = "draw",
+  RequestDraw = "requestDraw",
+  GiveCard = "giveCard",
 }
 
 export interface Card {
@@ -52,29 +53,36 @@ export interface PlayerState {
   readonly hand: readonly Card[];
 }
 
+export interface PendingDraw {
+  readonly requesterId: string;
+  readonly donorId: string;
+}
+
 export interface SevensGameObject {
   readonly variant: SevensVariant;
   readonly status: GameStatus;
   readonly board: BoardState;
   readonly players: readonly PlayerState[];
   readonly currentPlayerId: string;
+  readonly pendingDraw: PendingDraw | null;
   readonly winnerId: string | null;
 }
 
 export interface PlayAction {
   readonly type: TurnActionType.Play;
-  readonly playerId: string;
   readonly card: Card;
 }
 
-export interface DrawAction {
-  readonly type: TurnActionType.Draw;
-  readonly playerId: string;
-  readonly fromPlayerId: string;
+export interface RequestDrawAction {
+  readonly type: TurnActionType.RequestDraw;
+}
+
+export interface GiveCardAction {
+  readonly type: TurnActionType.GiveCard;
   readonly card: Card;
 }
 
-export type TurnAction = PlayAction | DrawAction;
+export type TurnAction = PlayAction | RequestDrawAction | GiveCardAction;
 export type RandomSource = () => number;
 
 export interface InitializeOptions {
