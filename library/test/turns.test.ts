@@ -46,6 +46,52 @@ describe("play actions", () => {
     expect(result?.currentPlayerId).toBe("bob");
   });
 
+  test("wraps turn advancement from the final seat to the first", () => {
+    const game = createGame({
+      players: [
+        { id: "alice", hand: [card(Suit.Clubs, Rank.Two)] },
+        { id: "bob", hand: [card(Suit.Hearts, Rank.Seven)] },
+        { id: "carol", hand: [sevenOfDiamonds, card(Suit.Spades, Rank.Seven)] },
+      ],
+      currentPlayerId: "carol",
+    });
+    const result = validateTurn(game, {
+      type: TurnActionType.Play,
+      playerId: "carol",
+      card: sevenOfDiamonds,
+    });
+
+    expect(result?.currentPlayerId).toBe("alice");
+  });
+
+  test("expands suit bounds down to ace and up to king", () => {
+    const game = createGame({
+      board: {
+        ...createEmptyBoard(),
+        [Suit.Clubs]: { min: Rank.Two, max: Rank.Queen },
+      },
+      players: [
+        { id: "alice", hand: [card(Suit.Clubs, Rank.Ace), card(Suit.Hearts, Rank.Two)] },
+        { id: "bob", hand: [card(Suit.Clubs, Rank.King), card(Suit.Spades, Rank.Two)] },
+        { id: "carol", hand: [card(Suit.Hearts, Rank.Three)] },
+      ],
+    });
+
+    const afterAce = validateTurn(game, {
+      type: TurnActionType.Play,
+      playerId: "alice",
+      card: card(Suit.Clubs, Rank.Ace),
+    });
+    const afterKing = validateTurn(afterAce!, {
+      type: TurnActionType.Play,
+      playerId: "bob",
+      card: card(Suit.Clubs, Rank.King),
+    });
+
+    expect(afterAce?.board[Suit.Clubs]).toEqual({ min: Rank.Ace, max: Rank.Queen });
+    expect(afterKing?.board[Suit.Clubs]).toEqual({ min: Rank.Ace, max: Rank.King });
+  });
+
   test("rejects the wrong player, an unowned card, and an illegal card", () => {
     const game = createGame();
 
@@ -100,6 +146,39 @@ describe("play actions", () => {
 });
 
 describe("draw actions", () => {
+  test("keeps the forced opening after a draw on an empty board", () => {
+    const drawnCard = card(Suit.Clubs, Rank.Ace);
+    const game = createGame({
+      players: [
+        { id: "alice", hand: [card(Suit.Clubs, Rank.Two)] },
+        { id: "bob", hand: [sevenOfDiamonds, card(Suit.Hearts, Rank.Seven)] },
+        { id: "carol", hand: [drawnCard, card(Suit.Spades, Rank.Seven)] },
+      ],
+    });
+    const result = validateTurn(game, {
+      type: TurnActionType.Draw,
+      playerId: "alice",
+      fromPlayerId: "carol",
+      card: drawnCard,
+    });
+
+    expect(result?.board).toEqual(createEmptyBoard());
+    expect(
+      validateTurn(result!, {
+        type: TurnActionType.Play,
+        playerId: "bob",
+        card: card(Suit.Hearts, Rank.Seven),
+      }),
+    ).toBeNull();
+    expect(
+      validateTurn(result!, {
+        type: TurnActionType.Play,
+        playerId: "bob",
+        card: sevenOfDiamonds,
+      })?.board[Suit.Diamonds],
+    ).toEqual({ min: Rank.Seven, max: Rank.Seven });
+  });
+
   test("draws from the player on the right even when a play is available", () => {
     const game = createGame();
     const snapshot = structuredClone(game);
