@@ -1,5 +1,5 @@
 import { createEmptyBoard } from "./board.js";
-import { cardEquals, createDeck } from "./cards.js";
+import { cardEquals } from "./cards.js";
 import { dealCards, shuffleCards } from "./deck.js";
 import {
   GameStatus,
@@ -31,17 +31,17 @@ export function initializeSevens(
   options: InitializeOptions = {},
 ): SevensGameObject {
   validatePlayerIds(playerIds);
-  getVariantRules(variant);
+  const rules = getVariantRules(variant);
 
-  const deck = shuffleCards(createDeck(), options.random ?? Math.random);
+  const deck = shuffleCards(rules.createDeck(), options.random ?? Math.random);
   const players = dealCards(deck, playerIds);
-  const openingCard = { suit: Suit.Diamonds, rank: Rank.Seven };
+  const openingCard = { suit: Suit.Spades, rank: Rank.Seven };
   const openingPlayer = players.find(({ hand }) =>
     hand.some((card) => cardEquals(card, openingCard)),
   );
 
   if (openingPlayer === undefined) {
-    throw new Error("Shuffled deck does not contain the seven of diamonds");
+    throw new Error("Shuffled deck does not contain the seven of spades");
   }
 
   return {

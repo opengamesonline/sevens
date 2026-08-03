@@ -1,3 +1,4 @@
+import { SevensVariant } from '@opengamesonline/sevens';
 import { router } from 'expo-router';
 import { useEffect, useEffectEvent } from 'react';
 import { Alert, BackHandler, StyleSheet, Text, View } from 'react-native';
@@ -154,6 +155,10 @@ export default function SessionScreen() {
               : `Need ${lobby.minPlayers - lobby.playerCount} more player${lobby.minPlayers - lobby.playerCount === 1 ? '' : 's'}`}
             {' · '}
             {lobby.spectatorCount} watching
+            {' · '}
+            {lobby.variant === SevensVariant.Joker ? 'joker' : 'standard'}
+            {' · '}
+            hints {lobby.showPlayableCards ? 'on' : 'off'}
           </Text>
         ) : null}
 

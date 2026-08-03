@@ -1,5 +1,5 @@
 import { LanMultiplayer } from '@opengamesonline/expo-lan-multiplayer';
-import type { SevensGameObject, TurnAction } from '@opengamesonline/sevens';
+import type { TurnAction } from '@opengamesonline/sevens';
 import { AppState } from 'react-native';
 import {
   createContext,
@@ -17,6 +17,7 @@ import {
 } from './sevens-policy';
 import type {
   SevensDiscoveredGame,
+  SevensGameState,
   SevensLobbyMetadata,
   SevensMultiplayer,
   SevensParticipantMetadata,
@@ -33,6 +34,8 @@ export type JoinSevensGameOptions = {
 };
 
 export type SevensMultiplayerContextValue = {
+  username: string;
+  setUsername(username: string): void;
   games: readonly SevensDiscoveredGame[];
   snapshot: SevensSessionSnapshot | null;
   busy: boolean;
@@ -63,6 +66,7 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
   const sendingRef = useRef(false);
   const mountedRef = useRef(false);
   const [games, setGames] = useState<SevensDiscoveredGame[]>([]);
+  const [username, setUsername] = useState('Player');
   const [snapshot, setSnapshot] = useState<SevensSessionSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [sending, setSending] = useState(false);
@@ -254,7 +258,7 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
       if (!isSevensLobbyMetadata(game.lobbyMetadata)) {
         throw new Error('This game is not compatible with this version of Sevens');
       }
-      const session = await multiplayer.joinGame<SevensGameObject, TurnAction>({
+      const session = await multiplayer.joinGame<SevensGameState, TurnAction>({
         service: game,
         participantName,
         participantMetadata: createSevensParticipantMetadata(role),
@@ -347,6 +351,8 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
   return (
     <SevensMultiplayerContext.Provider
       value={{
+        username,
+        setUsername,
         games,
         snapshot,
         busy,

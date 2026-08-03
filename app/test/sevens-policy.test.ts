@@ -2,13 +2,28 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { Participant } from '@opengamesonline/expo-lan-multiplayer';
-import { TurnActionType } from '@opengamesonline/sevens';
+import {
+  GameStatus,
+  JOKER_CARD,
+  Rank,
+  SevensVariant,
+  Suit,
+  TurnActionType,
+  createEmptyBoard,
+  isJokerCard,
+  placeCard,
+  type TurnAction,
+} from '@opengamesonline/sevens';
 
 import {
   createSevensParticipantMetadata,
   createSevensPolicy,
 } from '../src/features/multiplayer/sevens-policy';
-import type { SevensParticipantMetadata } from '../src/features/multiplayer/types';
+import type {
+  SevensGameState,
+  SevensParticipantMetadata,
+} from '../src/features/multiplayer/types';
+import { isTurnAction } from '../src/features/multiplayer/validation';
 
 function participant(
   id: string,
@@ -30,6 +45,7 @@ test('initializes from finalized player roles and excludes a spectator host', ()
     participantName: host.name,
     role: 'spectator',
     maxPlayers: 4,
+    showPlayableCards: false,
   });
   const game = policy.createInitialState([host, alice, bob, carol]);
 
@@ -38,6 +54,7 @@ test('initializes from finalized player roles and excludes a spectator host', ()
     ['alice', 'bob', 'carol'],
   );
   assert.equal(game.players.flatMap(({ hand }) => hand).length, 52);
+  assert.equal(game.lastIllegalMovePlayerId, null);
 });
 
 test('computes role-aware lobby metadata and enforces lobby policy', () => {
@@ -46,6 +63,8 @@ test('computes role-aware lobby metadata and enforces lobby policy', () => {
     participantName: alice.name,
     role: 'player',
     maxPlayers: 3,
+    showPlayableCards: true,
+    variant: SevensVariant.Joker,
   });
   const participants = [alice, bob, carol, host];
 
@@ -56,7 +75,18 @@ test('computes role-aware lobby metadata and enforces lobby policy', () => {
     spectatorCount: 1,
     minPlayers: 3,
     maxPlayers: 3,
+    showPlayableCards: true,
+    variant: SevensVariant.Joker,
   });
+  const jokerGame = policy.createInitialState(participants);
+  assert.equal(jokerGame.players.flatMap(({ hand }) => hand).filter(isJokerCard).length, 1);
+  assert.equal(jokerGame.players.flatMap(({ hand }) => hand).length, 53);
+  assert.equal(
+    isTurnAction(
+      JSON.parse(JSON.stringify({ type: TurnActionType.GiveCard, card: JOKER_CARD })),
+    ),
+    true,
+  );
   assert.match(
     policy.validateJoin?.(participant('duplicate', 'aLiCe', 'spectator', 4), participants) ?? '',
     /already in use/,
@@ -73,21 +103,93 @@ test('computes role-aware lobby metadata and enforces lobby policy', () => {
   assert.equal(policy.validateStart?.([alice, bob, carol]), null);
 });
 
+test('applies a serialized Joker bridge play through the host policy', () => {
+  const policy = createSevensPolicy({
+    gameName: 'Joker Table',
+    participantName: alice.name,
+    role: 'player',
+    maxPlayers: 3,
+    showPlayableCards: false,
+    variant: SevensVariant.Joker,
+  });
+  const boardCards = [
+    { suit: Suit.Spades, rank: Rank.Seven },
+    { suit: Suit.Spades, rank: Rank.Eight },
+    { suit: Suit.Spades, rank: Rank.Nine },
+    { suit: Suit.Spades, rank: Rank.Ten },
+    { suit: Suit.Hearts, rank: Rank.Seven },
+    { suit: Suit.Hearts, rank: Rank.Eight },
+  ] as const;
+  const game: SevensGameState = {
+    variant: SevensVariant.Joker,
+    status: GameStatus.Active,
+    board: boardCards.reduce(placeCard, createEmptyBoard()),
+    players: [
+      {
+        id: alice.id,
+        hand: [JOKER_CARD, { suit: Suit.Hearts, rank: Rank.Ten }],
+      },
+      {
+        id: bob.id,
+        hand: [
+          { suit: Suit.Hearts, rank: Rank.Nine },
+          { suit: Suit.Clubs, rank: Rank.Two },
+        ],
+      },
+      { id: carol.id, hand: [{ suit: Suit.Diamonds, rank: Rank.Seven }] },
+    ],
+    currentPlayerId: alice.id,
+    pendingDraw: null,
+    winnerId: null,
+    lastIllegalMovePlayerId: null,
+  };
+  const serializedGame = JSON.parse(JSON.stringify(game)) as SevensGameState;
+  const serializedAction = JSON.parse(
+    JSON.stringify({
+      type: TurnActionType.Play,
+      card: { suit: Suit.Hearts, rank: Rank.Ten },
+    }),
+  ) as TurnAction;
+
+  const result = policy.reduceEvent(serializedGame, serializedAction, alice);
+
+  assert.deepEqual(result.board[Suit.Hearts], { min: Rank.Seven, max: Rank.Ten });
+  assert.equal(result.players[0]!.hand.length, 0);
+  assert.equal(result.players[1]!.hand.some(isJokerCard), true);
+  assert.equal(result.winnerId, alice.id);
+});
+
 test('uses connection-bound actors for the two-step draw flow', () => {
   const policy = createSevensPolicy({
     gameName: 'Table',
     participantName: alice.name,
     role: 'player',
     maxPlayers: 3,
+    showPlayableCards: false,
   });
   const participants = [alice, bob, carol];
   const game = policy.createInitialState(participants);
   const requester = participants.find(({ id }) => id === game.currentPlayerId)!;
   const requesterIndex = participants.findIndex(({ id }) => id === requester.id);
   const donor = participants[(requesterIndex - 1 + participants.length) % participants.length]!;
+  const currentHand = game.players.find(({ id }) => id === requester.id)!.hand;
+  const illegalOpeningCard = currentHand.find(
+    (card) => !isJokerCard(card) && (card.suit !== 'spades' || card.rank !== 7),
+  )!;
+
+  const illegalAttempt = policy.reduceEvent(
+    game,
+    { type: TurnActionType.Play, card: illegalOpeningCard },
+    requester,
+  );
+  assert.notEqual(illegalAttempt, game);
+  assert.equal(illegalAttempt.lastIllegalMovePlayerId, requester.id);
+  assert.equal(illegalAttempt.currentPlayerId, game.currentPlayerId);
+  assert.deepEqual(illegalAttempt.board, game.board);
+  assert.deepEqual(illegalAttempt.players, game.players);
 
   const pending = policy.reduceEvent(
-    game,
+    illegalAttempt,
     { type: TurnActionType.RequestDraw },
     requester,
   );
@@ -95,6 +197,7 @@ test('uses connection-bound actors for the two-step draw flow', () => {
     requesterId: requester.id,
     donorId: donor.id,
   });
+  assert.equal(pending.lastIllegalMovePlayerId, null);
 
   const donorCard = pending.players.find(({ id }) => id === donor.id)!.hand[0]!;
   const completed = policy.reduceEvent(
@@ -110,8 +213,27 @@ test('uses connection-bound actors for the two-step draw flow', () => {
 
   const spectatorAttempt = policy.reduceEvent(
     completed,
-    { type: TurnActionType.RequestDraw },
+    { type: TurnActionType.Play, card: completed.players[0]!.hand[0]! },
     host,
   );
   assert.equal(spectatorAttempt, completed);
+
+  const malformedAttempt = policy.reduceEvent(
+    completed,
+    { type: TurnActionType.Play } as TurnAction,
+    requester,
+  );
+  assert.equal(malformedAttempt, completed);
+
+  const finished = {
+    ...completed,
+    status: GameStatus.Finished,
+    winnerId: completed.players[0]!.id,
+  };
+  const stalePlay = policy.reduceEvent(
+    finished,
+    { type: TurnActionType.Play, card: finished.players[0]!.hand[0]! },
+    participants[0]!,
+  );
+  assert.equal(stalePlay, finished);
 });

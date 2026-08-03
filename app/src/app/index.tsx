@@ -1,4 +1,4 @@
-import { Rank, Suit } from '@opengamesonline/sevens';
+import { Rank, SevensVariant, Suit } from '@opengamesonline/sevens';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -7,9 +7,11 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PlayingCard } from '@/components/cards/playing-card';
 import {
@@ -30,29 +32,68 @@ import {
   type SevensParticipantRole,
 } from '@/features/multiplayer';
 
+const variantOptions = [
+  {
+    value: SevensVariant.Standard,
+    label: 'Standard',
+    description: 'Classic 52-card game.',
+  },
+  {
+    value: SevensVariant.Joker,
+    label: 'Joker',
+    description: 'One Joker enables bridge plays.',
+  },
+] as const;
+
 export default function HomeScreen() {
-  const { busy, create, discover, error } = useSevensMultiplayer();
+  const insets = useSafeAreaInsets();
+  const { busy, create, discover, error, setUsername, username } = useSevensMultiplayer();
   const [showCreate, setShowCreate] = useState(false);
   const [gameName, setGameName] = useState('The Green Seven');
-  const [participantName, setParticipantName] = useState('Player');
   const [role, setRole] = useState<SevensParticipantRole>('player');
+  const [variant, setVariant] = useState(SevensVariant.Standard);
   const [maxPlayers, setMaxPlayers] = useState(4);
+  const [showPlayableCards, setShowPlayableCards] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+
+  function requireUsername(): string | null {
+    const cleanUsername = username.trim();
+    if (!cleanUsername) {
+      setUsernameError('Enter the name other people will see at the table.');
+      return null;
+    }
+    if (cleanUsername !== username) setUsername(cleanUsername);
+    setUsernameError(null);
+    return cleanUsername;
+  }
+
+  function openCreate() {
+    if (!requireUsername()) return;
+    setFormError(null);
+    setShowCreate(true);
+  }
 
   async function submitCreate() {
     const cleanGameName = gameName.trim();
-    const cleanParticipantName = participantName.trim();
-    if (!cleanGameName || !cleanParticipantName) {
-      setFormError('Enter both a lobby name and your display name.');
+    const cleanUsername = requireUsername();
+    if (!cleanGameName) {
+      setFormError('Enter a lobby name.');
+      return;
+    }
+    if (!cleanUsername) {
+      setShowCreate(false);
       return;
     }
 
     setFormError(null);
     const created = await create({
       gameName: cleanGameName,
-      participantName: cleanParticipantName,
+      participantName: cleanUsername,
       role,
       maxPlayers,
+      showPlayableCards,
+      variant,
     });
     if (created) {
       setShowCreate(false);
@@ -61,6 +102,7 @@ export default function HomeScreen() {
   }
 
   async function listGames() {
+    if (!requireUsername()) return;
     if (await discover()) router.push('/games');
   }
 
@@ -77,7 +119,7 @@ export default function HomeScreen() {
             <PlayingCard card={{ suit: Suit.Hearts, rank: Rank.Seven }} />
           </View>
           <View style={styles.centerCard}>
-            <PlayingCard card={{ suit: Suit.Diamonds, rank: Rank.Seven }} />
+            <PlayingCard card={{ suit: Suit.Spades, rank: Rank.Seven }} />
           </View>
         </View>
         <Text style={styles.heroTitle}>Build every suit from seven.</Text>
@@ -86,14 +128,24 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      <ErrorBanner message={error} />
+      <ErrorBanner message={usernameError ?? error} />
 
       <RoomPanel>
+        <RoomInput
+          label="YOUR NAME"
+          value={username}
+          onChangeText={(value) => {
+            setUsername(value);
+            setUsernameError(null);
+          }}
+          maxLength={24}
+          placeholder="Player"
+        />
         <RoomButton
           label="Create Game"
           variant="primary"
           disabled={busy}
-          onPress={() => setShowCreate(true)}
+          onPress={openCreate}
         />
         <RoomButton label="List Games" disabled={busy} onPress={() => void listGames()} />
         {busy ? <BusyIndicator /> : null}
@@ -112,7 +164,12 @@ export default function HomeScreen() {
           style={styles.modalBackdrop}
         >
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowCreate(false)} />
-          <View style={styles.modalCard}>
+          <View
+            style={[
+              styles.modalCard,
+              { paddingBottom: Math.max(22, insets.bottom + 16) },
+            ]}
+          >
             <View style={styles.modalHandle} />
             <Text style={styles.modalEyebrow}>OPEN A TABLE</Text>
             <Text style={styles.modalTitle}>Create Game</Text>
@@ -123,13 +180,28 @@ export default function HomeScreen() {
               maxLength={40}
               placeholder="The Green Seven"
             />
-            <RoomInput
-              label="YOUR NAME"
-              value={participantName}
-              onChangeText={setParticipantName}
-              maxLength={24}
-              placeholder="Player"
-            />
+            <View style={styles.variantField}>
+              <Text style={styles.fieldLabel}>VARIANT</Text>
+              <View style={styles.variantOptions}>
+                {variantOptions.map((option) => {
+                  const selected = option.value === variant;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      onPress={() => setVariant(option.value)}
+                      style={[styles.variantOption, selected && styles.selectedVariantOption]}
+                    >
+                      <Text style={[styles.variantName, selected && styles.selectedVariantName]}>
+                        {option.label}
+                      </Text>
+                      <Text style={styles.variantDescription}>{option.description}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
             <RolePicker value={role} onChange={setRole} />
             <View style={styles.capacityRow}>
               <View>
@@ -153,6 +225,21 @@ export default function HomeScreen() {
                   <Text style={styles.stepperText}>+</Text>
                 </Pressable>
               </View>
+            </View>
+            <View style={styles.settingRow}>
+              <View style={styles.settingCopy}>
+                <Text style={styles.fieldLabel}>SHOW PLAYABLE CARDS</Text>
+                <Text style={styles.capacityHint}>
+                  Highlight legal moves for everyone at the table.
+                </Text>
+              </View>
+              <Switch
+                accessibilityLabel="Show playable cards"
+                value={showPlayableCards}
+                onValueChange={setShowPlayableCards}
+                trackColor={{ false: GameColors.feltLight, true: GameColors.goldDark }}
+                thumbColor={showPlayableCards ? GameColors.gold : GameColors.creamMuted}
+              />
             </View>
             <ErrorBanner message={formError ?? error} />
             <RoomButton
@@ -206,7 +293,7 @@ const styles = StyleSheet.create({
     borderColor: GameColors.border,
     borderWidth: 1,
     padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 22,
+    paddingBottom: 22,
     gap: 14,
   },
   modalHandle: {
@@ -220,6 +307,26 @@ const styles = StyleSheet.create({
   modalEyebrow: { color: GameColors.gold, fontSize: 10, fontWeight: '800', letterSpacing: 2 },
   modalTitle: { color: GameColors.white, fontSize: 27, fontWeight: '700' },
   capacityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  settingRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  settingCopy: { flex: 1 },
+  variantField: { gap: 8 },
+  variantOptions: { flexDirection: 'row', gap: 9 },
+  variantOption: {
+    flex: 1,
+    minHeight: 62,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: GameColors.border,
+    padding: 10,
+    backgroundColor: 'rgba(246,240,223,0.04)',
+  },
+  selectedVariantOption: {
+    borderColor: GameColors.gold,
+    backgroundColor: 'rgba(215,174,90,0.13)',
+  },
+  variantName: { color: GameColors.creamMuted, fontSize: 14, fontWeight: '800' },
+  selectedVariantName: { color: GameColors.gold },
+  variantDescription: { color: GameColors.whiteMuted, fontSize: 10, lineHeight: 14, marginTop: 3 },
   fieldLabel: { color: GameColors.gold, fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
   capacityHint: { color: GameColors.whiteMuted, fontSize: 11, marginTop: 4 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 12 },

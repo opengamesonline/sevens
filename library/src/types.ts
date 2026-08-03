@@ -23,6 +23,7 @@ export enum Rank {
 
 export enum SevensVariant {
   Standard = "standard",
+  Joker = "joker",
 }
 
 export enum GameStatus {
@@ -36,10 +37,17 @@ export enum TurnActionType {
   GiveCard = "giveCard",
 }
 
-export interface Card {
+export interface StandardCard {
+  readonly kind?: never;
   readonly suit: Suit;
   readonly rank: Rank;
 }
+
+export interface JokerCard {
+  readonly kind: "joker";
+}
+
+export type Card = StandardCard | JokerCard;
 
 export interface SuitBoardState {
   readonly min: Rank | null;
@@ -51,6 +59,11 @@ export type BoardState = Readonly<Record<Suit, SuitBoardState>>;
 export interface PlayerState {
   readonly id: string;
   readonly hand: readonly Card[];
+}
+
+export interface FinalScore {
+  readonly playerId: string;
+  readonly score: number;
 }
 
 export interface PendingDraw {
@@ -92,8 +105,27 @@ export interface InitializeOptions {
 export type PlayableCardsCalculator = (
   board: BoardState,
   hand: readonly Card[],
+  context?: PlayableCardsContext,
 ) => readonly Card[];
 
+export interface PlayableCardsContext {
+  readonly playerId: string;
+  readonly players: readonly PlayerState[];
+}
+
+export interface PlayResolution {
+  readonly board: BoardState;
+  readonly players: readonly PlayerState[];
+}
+
+export type PlayResolver = (
+  game: SevensGameObject,
+  actorId: string,
+  card: Card,
+) => PlayResolution | null;
+
 export interface VariantRules {
+  readonly createDeck: () => readonly Card[];
   readonly getPlayableCards: PlayableCardsCalculator;
+  readonly resolvePlay: PlayResolver;
 }

@@ -1,9 +1,9 @@
 import type { Card, PlayerState, RandomSource } from "./types.js";
 
-export function shuffleCards(
-  cards: readonly Card[],
+export function shuffleCards<T extends Card>(
+  cards: readonly T[],
   random: RandomSource = Math.random,
-): readonly Card[] {
+): readonly T[] {
   const shuffled = [...cards];
 
   for (let index = shuffled.length - 1; index > 0; index -= 1) {

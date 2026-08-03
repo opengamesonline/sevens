@@ -28,6 +28,7 @@ export {
 } from './types';
 export type {
   SevensDiscoveredGame,
+  SevensGameState,
   SevensLobbyMetadata,
   SevensMultiplayer,
   SevensParticipantMetadata,

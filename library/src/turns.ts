@@ -1,4 +1,3 @@
-import { placeCard } from "./board.js";
 import { cardEquals } from "./cards.js";
 import {
   GameStatus,
@@ -10,7 +9,7 @@ import {
   type SevensGameObject,
   type TurnAction,
 } from "./types.js";
-import { getPlayableCards } from "./variants.js";
+import { getVariantRules } from "./variants.js";
 
 function removeCard(hand: readonly Card[], card: Card): readonly Card[] | null {
   const cardIndex = hand.findIndex((candidate) => cardEquals(candidate, card));
@@ -44,25 +43,21 @@ function validatePlay(
     return null;
   }
 
-  const nextHand = removeCard(player.hand, action.card);
-  if (nextHand === null) {
+  const resolution = getVariantRules(game.variant).resolvePlay(game, actorId, action.card);
+  if (resolution === null) {
     return null;
   }
 
-  const playableCards = getPlayableCards(game.board, player.hand, game.variant);
-  if (!playableCards.some((card) => cardEquals(card, action.card))) {
+  const nextPlayer = resolution.players.find((candidate) => candidate.id === actorId);
+  if (nextPlayer === undefined) {
     return null;
   }
-
-  const players = game.players.map((candidate) =>
-    candidate.id === player.id ? { ...candidate, hand: nextHand } : candidate,
-  );
-  const hasWinner = nextHand.length === 0;
+  const hasWinner = nextPlayer.hand.length === 0;
 
   return {
     ...game,
-    board: placeCard(game.board, action.card),
-    players,
+    board: resolution.board,
+    players: resolution.players,
     status: hasWinner ? GameStatus.Finished : GameStatus.Active,
     currentPlayerId: hasWinner ? player.id : getNextPlayerId(game.players, playerIndex),
     winnerId: hasWinner ? player.id : null,

@@ -1,9 +1,10 @@
 import type { CreateGameOptions, Participant } from '@opengamesonline/expo-lan-multiplayer';
 import {
+  GameStatus,
   initializeSevens,
   SevensVariant,
+  TurnActionType,
   validateTurn,
-  type SevensGameObject,
   type TurnAction,
 } from '@opengamesonline/sevens';
 
@@ -13,6 +14,7 @@ import {
   SEVENS_APP_ID,
   SEVENS_GAME_VERSION,
   type SevensLobbyMetadata,
+  type SevensGameState,
   type SevensParticipantMetadata,
   type SevensParticipantRole,
 } from './types';
@@ -23,6 +25,7 @@ export type CreateSevensPolicyOptions = {
   participantName: string;
   role: SevensParticipantRole;
   maxPlayers: number;
+  showPlayableCards: boolean;
   variant?: SevensVariant;
 };
 
@@ -61,9 +64,10 @@ export function createSevensPolicy({
   participantName,
   role,
   maxPlayers,
+  showPlayableCards,
   variant = SevensVariant.Standard,
 }: CreateSevensPolicyOptions): CreateGameOptions<
-  SevensGameObject,
+  SevensGameState,
   TurnAction,
   SevensParticipantMetadata,
   SevensLobbyMetadata
@@ -84,7 +88,10 @@ export function createSevensPolicy({
     participantMetadata: createSevensParticipantMetadata(role),
     createInitialState(participants) {
       const playerIds = players(participants).map(({ id }) => id);
-      return initializeSevens(playerIds, variant);
+      return {
+        ...initializeSevens(playerIds, variant),
+        lastIllegalMovePlayerId: null,
+      };
     },
     getLobbyMetadata(participants) {
       return {
@@ -94,6 +101,8 @@ export function createSevensPolicy({
         spectatorCount: spectators(participants).length,
         minPlayers: MIN_SEVENS_PLAYERS,
         maxPlayers,
+        showPlayableCards,
+        variant,
       };
     },
     validateJoin(candidate, participants) {
@@ -131,7 +140,14 @@ export function createSevensPolicy({
         return game;
       }
 
-      return validateTurn(game, participant.id, event) ?? game;
+      const nextGame = validateTurn(game, participant.id, event);
+      if (nextGame) {
+        return { ...nextGame, lastIllegalMovePlayerId: null };
+      }
+
+      return game.status === GameStatus.Active && event.type === TurnActionType.Play
+        ? { ...game, lastIllegalMovePlayerId: participant.id }
+        : game;
     },
   };
 }

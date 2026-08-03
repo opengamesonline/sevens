@@ -9,11 +9,11 @@ import {
 } from "../src/index.js";
 
 describe("initializeSevens", () => {
-  test("deals every card and starts with the holder of the seven of diamonds", () => {
+  test("deals every card and starts with the holder of the seven of spades", () => {
     const ids = ["alice", "bob", "carol"];
     const game = initializeSevens(ids, SevensVariant.Standard, { random: () => 0 });
     const openingPlayer = game.players.find(({ hand }) =>
-      hand.some((card) => cardEquals(card, { suit: Suit.Diamonds, rank: Rank.Seven })),
+      hand.some((card) => cardEquals(card, { suit: Suit.Spades, rank: Rank.Seven })),
     );
 
     expect(game.players.flatMap(({ hand }) => hand)).toHaveLength(52);

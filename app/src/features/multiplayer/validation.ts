@@ -1,8 +1,10 @@
 import {
   CARD_RANKS,
   CARD_SUITS,
+  SevensVariant,
   TurnActionType,
   type Card,
+  type StandardCard,
   type TurnAction,
 } from '@opengamesonline/sevens';
 
@@ -47,15 +49,18 @@ export function isSevensLobbyMetadata(value: unknown): value is SevensLobbyMetad
     value.minPlayers === MIN_SEVENS_PLAYERS &&
     Number.isInteger(value.maxPlayers) &&
     (value.maxPlayers as number) >= MIN_SEVENS_PLAYERS &&
-    (value.maxPlayers as number) <= MAX_SEVENS_PLAYERS
+    (value.maxPlayers as number) <= MAX_SEVENS_PLAYERS &&
+    typeof value.showPlayableCards === 'boolean' &&
+    Object.values(SevensVariant).includes(value.variant as SevensVariant)
   );
 }
 
 function isCard(value: unknown): value is Card {
   if (!isRecord(value)) return false;
+  if (value.kind === 'joker') return true;
   return (
-    CARD_SUITS.includes(value.suit as Card['suit']) &&
-    CARD_RANKS.includes(value.rank as Card['rank'])
+    CARD_SUITS.includes(value.suit as StandardCard['suit']) &&
+    CARD_RANKS.includes(value.rank as StandardCard['rank'])
   );
 }
 

@@ -1,12 +1,13 @@
-import {
-  CARD_SUITS,
-  GameStatus,
-  getPlayableCards,
-  type Card,
-  type Suit,
-} from '@opengamesonline/sevens';
+import { GameStatus, Suit, getPlayableCards, type Card } from '@opengamesonline/sevens';
 
 import type { SevensSessionSnapshot } from './types';
+
+const BOARD_SUIT_ORDER: readonly Suit[] = [
+  Suit.Spades,
+  Suit.Diamonds,
+  Suit.Clubs,
+  Suit.Hearts,
+];
 
 export type SevensOpponent = {
   id: string;
@@ -73,14 +74,17 @@ export function selectPlayableCards(
   ) {
     return [];
   }
-  return getPlayableCards(game.board, hand, game.variant);
+  return getPlayableCards(game.board, hand, game.variant, {
+    playerId: snapshot.self.id,
+    players: game.players,
+  });
 }
 
 export function selectSuitRuns(
   snapshot: SevensSessionSnapshot | null,
 ): readonly SevensSuitRun[] {
   const board = snapshot?.state?.board;
-  return CARD_SUITS.map((suit) => {
+  return BOARD_SUIT_ORDER.map((suit) => {
     const bounds = board?.[suit];
     const cards: Card[] = [];
     if (bounds?.min !== null && bounds?.min !== undefined && bounds.max !== null) {

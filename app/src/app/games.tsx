@@ -1,3 +1,4 @@
+import { SevensVariant } from '@opengamesonline/sevens';
 import { router } from 'expo-router';
 import { useEffect, useEffectEvent, useState } from 'react';
 import {
@@ -10,13 +11,13 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   BrandHeader,
   ErrorBanner,
   RolePicker,
   RoomButton,
-  RoomInput,
   RoomPanel,
   RoomScreen,
 } from '@/components/room/room-ui';
@@ -28,12 +29,12 @@ import {
 } from '@/features/multiplayer';
 
 export default function GamesScreen() {
-  const { busy, error, games, join, refresh, stop } = useSevensMultiplayer();
+  const insets = useSafeAreaInsets();
+  const { busy, error, games, join, refresh, stop, username } = useSevensMultiplayer();
   const stopDiscovery = useEffectEvent(() => {
     void stop();
   });
   const [selectedGame, setSelectedGame] = useState<SevensDiscoveredGame | null>(null);
-  const [participantName, setParticipantName] = useState('Player');
   const [role, setRole] = useState<SevensParticipantRole>('player');
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -60,7 +61,7 @@ export default function GamesScreen() {
       setFormError('This lobby is no longer available.');
       return;
     }
-    const cleanName = participantName.trim();
+    const cleanName = username.trim();
     if (!cleanName) {
       setFormError('Enter the name other people will see at the table.');
       return;
@@ -119,6 +120,11 @@ export default function GamesScreen() {
                         {game.lobbyMetadata.playerCount}/{game.lobbyMetadata.maxPlayers} PLAYERS ·{' '}
                         {game.lobbyMetadata.spectatorCount} WATCHING
                       </Text>
+                      <Text style={styles.hintMeta}>
+                        {game.lobbyMetadata.variant === SevensVariant.Joker ? 'JOKER' : 'STANDARD'}
+                        {' · '}PLAYABLE HINTS{' '}
+                        {game.lobbyMetadata.showPlayableCards ? 'ON' : 'OFF'}
+                      </Text>
                     </View>
                     <Text style={styles.joinText}>{full ? 'WATCH' : 'JOIN'}</Text>
                   </View>
@@ -142,17 +148,19 @@ export default function GamesScreen() {
           style={styles.modalBackdrop}
         >
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setSelectedGame(null)} />
-          <View style={styles.modalCard}>
+          <View
+            style={[
+              styles.modalCard,
+              { paddingBottom: Math.max(22, insets.bottom + 16) },
+            ]}
+          >
             <View style={styles.modalHandle} />
             <Text style={styles.modalEyebrow}>JOIN TABLE</Text>
             <Text style={styles.modalTitle}>{selectedGame?.name}</Text>
-            <RoomInput
-              label="YOUR NAME"
-              value={participantName}
-              onChangeText={setParticipantName}
-              maxLength={24}
-              placeholder="Player"
-            />
+            <View style={styles.identityRow}>
+              <Text style={styles.identityLabel}>PLAYING AS</Text>
+              <Text style={styles.identityName}>{username.trim()}</Text>
+            </View>
             <RolePicker
               value={role}
               playerDisabled={playerFull}
@@ -195,6 +203,7 @@ const styles = StyleSheet.create({
   gameInfo: { flex: 1, gap: 4 },
   gameName: { color: GameColors.white, fontSize: 18, fontWeight: '700' },
   gameMeta: { color: GameColors.whiteMuted, fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
+  hintMeta: { color: GameColors.gold, fontSize: 9, fontWeight: '800', letterSpacing: 0.8 },
   joinText: { color: GameColors.gold, fontSize: 12, fontWeight: '900', letterSpacing: 1 },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,18,14,0.74)' },
   modalCard: {
@@ -207,7 +216,7 @@ const styles = StyleSheet.create({
     borderColor: GameColors.border,
     borderWidth: 1,
     padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 22,
+    paddingBottom: 22,
     gap: 14,
   },
   modalHandle: {
@@ -220,4 +229,14 @@ const styles = StyleSheet.create({
   },
   modalEyebrow: { color: GameColors.gold, fontSize: 10, fontWeight: '800', letterSpacing: 2 },
   modalTitle: { color: GameColors.white, fontSize: 27, fontWeight: '700' },
+  identityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 12,
+    padding: 12,
+    backgroundColor: 'rgba(246,240,223,0.06)',
+  },
+  identityLabel: { color: GameColors.gold, fontSize: 10, fontWeight: '800', letterSpacing: 1.4 },
+  identityName: { color: GameColors.cream, fontSize: 16, fontWeight: '700' },
 });

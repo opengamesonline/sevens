@@ -24,7 +24,7 @@ const game = initializeSevens(
 );
 ```
 
-`initializeSevens` accepts three to seven unique, non-empty player IDs. It creates and shuffles a standard 52-card deck, deals every card round-robin, and assigns the first turn to the player holding the seven of diamonds.
+`initializeSevens` accepts three to seven unique, non-empty player IDs. It creates the selected variant's deck, shuffles and deals every card round-robin, and assigns the first turn to the player holding the seven of spades. `SevensVariant.Standard` uses the standard 52-card deck. `SevensVariant.Joker` adds one Joker for 53 cards total.
 
 Inject a random source for deterministic simulations and tests:
 
@@ -45,7 +45,16 @@ const player = game.players.find(({ id }) => id === game.currentPlayerId)!;
 const playableCards = getPlayableCards(game.board, player.hand, game.variant);
 ```
 
-The standard variant requires the seven of diamonds as the opening card. After that play, a seven opens any other suit and cards can be placed immediately below the current minimum or above the current maximum for their suit.
+The standard variant requires the seven of spades as the opening card. Spades then extend normally by placing a card immediately below the current minimum or above the current maximum. Once the seven of spades is down, rank-seven cards can open the other suits. Every other non-spade card requires both normal adjacency in its own suit and the spade of the same rank to be on the board. For example, the six of hearts requires the six of spades to be within the current contiguous spade run and the six to be adjacent to the current hearts run.
+
+For the Joker variant, pass player context to include assisted plays that depend on cards in other hands:
+
+```ts
+const playableCards = getPlayableCards(game.board, player.hand, game.variant, {
+  playerId: player.id,
+  players: game.players,
+});
+```
 
 ## Validate a play
 
@@ -89,13 +98,27 @@ A draw request is allowed even if the current player has a playable card. While 
 - A pending draw with requester and donor IDs, or `null`.
 - The winner ID after completion.
 
-Cards use the `Suit` and `Rank` enums. Rank is numeric from `Rank.Ace` (`1`) through `Rank.King` (`13`), making board adjacency explicit while retaining enum names in TypeScript.
+`Card` is a `StandardCard | JokerCard` union. Standard cards retain the serializable `{ suit, rank }` shape and use the `Suit` and `Rank` enums. Rank is numeric from `Rank.Ace` (`1`) through `Rank.King` (`13`). The canonical frozen `JOKER_CARD` has the shape `{ kind: "joker" }`; use `isJokerCard(card)` to narrow the union. `cardEquals` supports both card types. The exported `createDeck()` continues to create only the standard 52-card deck.
 
 The first player whose hand becomes empty wins. This includes a donor who gives their final card. Finished games reject all subsequent actions.
 
+## Final scores
+
+```ts
+import { createFinalScores } from "@opengamesonline/sevens";
+
+const scores = createFinalScores(finishedGame);
+```
+
+`createFinalScores` returns one score for every player in seating order and rejects games that are still active. Each remaining card from two through nine is worth 5 points, tens and face cards are worth 10 points, aces are worth 15 points, and the Joker is worth 0 points. The winner therefore scores 0.
+
 ## Variants
 
-Game state stores a serializable `SevensVariant` value. `getVariantRules` resolves that value to a playable-card calculator. The MVP includes `SevensVariant.Standard`; future named variants can provide a different calculator without changing game state or turn orchestration.
+Game state stores a serializable `SevensVariant` value: `standard` or `joker`. `getVariantRules` resolves it through the variant factory registry to frozen rules that own deck construction, playable-card calculation, and play resolution. Unsupported values throw `RangeError`.
+
+The Joker variant follows all standard rules, including the mandatory seven-of-spades opening and matching-spade gate. The Joker itself can never be played onto the board. A player holding only the Joker has no playable cards and can request a draw normally.
+
+After the opening, the Joker can assist one atomic play. The actor must hold the Joker and a selected standard card exactly one rank beyond a bridge card of the same suit. The bridge must be currently playable under standard rules and held by another player; the selected card must be standard-playable after hypothetically placing the bridge. Playing the selected card removes it and the Joker from the actor, removes the bridge from its holder, places the bridge and selected card in that order, and gives the Joker to the bridge holder. If the actor holds the bridge, or either card fails the matching-spade gate, assistance is invalid. Normal plays never consume or transfer the Joker.
 
 ## Development
 

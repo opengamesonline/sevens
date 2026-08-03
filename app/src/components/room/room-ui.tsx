@@ -38,7 +38,7 @@ export function BrandHeader({ eyebrow, title }: { eyebrow: string; title: string
     <View style={styles.brandRow}>
       <View style={styles.brandMark}>
         <Text style={styles.brandMarkRank}>7</Text>
-        <Text style={styles.brandMarkSuit}>♦</Text>
+        <Text style={styles.brandMarkSuit}>♠</Text>
       </View>
       <View style={styles.brandCopy}>
         <Text style={styles.eyebrow}>{eyebrow}</Text>
@@ -85,6 +85,7 @@ export function RoomButton({
           styles.buttonText,
           variant === 'primary' && styles.primaryButtonText,
           variant === 'danger' && styles.dangerButtonText,
+          compact && styles.compactButtonText,
         ]}
       >
         {label}
@@ -187,8 +188,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 7 },
     elevation: 8,
   },
-  brandMarkRank: { color: GameColors.red, fontSize: 22, fontWeight: '800', lineHeight: 23 },
-  brandMarkSuit: { color: GameColors.red, fontSize: 18, lineHeight: 19 },
+  brandMarkRank: { color: GameColors.blackSuit, fontSize: 22, fontWeight: '800', lineHeight: 23 },
+  brandMarkSuit: { color: GameColors.blackSuit, fontSize: 18, lineHeight: 19 },
   brandCopy: { gap: 2 },
   eyebrow: { color: GameColors.gold, fontSize: 11, fontWeight: '800', letterSpacing: 2.2 },
   brandTitle: { color: GameColors.white, fontSize: 32, fontWeight: '700', letterSpacing: -1 },
@@ -217,8 +218,9 @@ const styles = StyleSheet.create({
   },
   primaryButton: { backgroundColor: GameColors.gold, borderColor: GameColors.gold },
   dangerButton: { borderColor: GameColors.danger, backgroundColor: 'rgba(213,107,98,0.12)' },
-  compactButton: { minHeight: 42, paddingHorizontal: 14 },
+  compactButton: { minHeight: 48, paddingHorizontal: 6 },
   buttonText: { color: GameColors.white, fontSize: 16, fontWeight: '700' },
+  compactButtonText: { fontSize: 12 },
   primaryButtonText: { color: GameColors.feltDeep },
   dangerButtonText: { color: '#FFD8D2' },
   disabled: { opacity: 0.38 },

@@ -12,7 +12,7 @@ import {
 } from "../src/index.js";
 
 const card = (suit: Suit, rank: Rank): Card => ({ suit, rank });
-const sevenOfDiamonds = card(Suit.Diamonds, Rank.Seven);
+const sevenOfSpades = card(Suit.Spades, Rank.Seven);
 
 function createGame(overrides: Partial<SevensGameObject> = {}): SevensGameObject {
   return {
@@ -20,9 +20,9 @@ function createGame(overrides: Partial<SevensGameObject> = {}): SevensGameObject
     status: GameStatus.Active,
     board: createEmptyBoard(),
     players: [
-      { id: "alice", hand: [sevenOfDiamonds, card(Suit.Clubs, Rank.Two)] },
+      { id: "alice", hand: [sevenOfSpades, card(Suit.Clubs, Rank.Two)] },
       { id: "bob", hand: [card(Suit.Hearts, Rank.Seven)] },
-      { id: "carol", hand: [card(Suit.Spades, Rank.Seven), card(Suit.Clubs, Rank.Ace)] },
+      { id: "carol", hand: [card(Suit.Diamonds, Rank.Seven), card(Suit.Clubs, Rank.Ace)] },
     ],
     currentPlayerId: "alice",
     pendingDraw: null,
@@ -37,11 +37,11 @@ describe("play actions", () => {
     const snapshot = structuredClone(game);
     const result = validateTurn(game, "alice", {
       type: TurnActionType.Play,
-      card: sevenOfDiamonds,
+      card: sevenOfSpades,
     });
 
     expect(game).toEqual(snapshot);
-    expect(result?.board[Suit.Diamonds]).toEqual({ min: Rank.Seven, max: Rank.Seven });
+    expect(result?.board[Suit.Spades]).toEqual({ min: Rank.Seven, max: Rank.Seven });
     expect(result?.players[0]?.hand).toEqual([card(Suit.Clubs, Rank.Two)]);
     expect(result?.currentPlayerId).toBe("bob");
   });
@@ -51,13 +51,13 @@ describe("play actions", () => {
       players: [
         { id: "alice", hand: [card(Suit.Clubs, Rank.Two)] },
         { id: "bob", hand: [card(Suit.Hearts, Rank.Seven)] },
-        { id: "carol", hand: [sevenOfDiamonds, card(Suit.Spades, Rank.Seven)] },
+        { id: "carol", hand: [sevenOfSpades, card(Suit.Diamonds, Rank.Seven)] },
       ],
       currentPlayerId: "carol",
     });
     const result = validateTurn(game, "carol", {
       type: TurnActionType.Play,
-      card: sevenOfDiamonds,
+      card: sevenOfSpades,
     });
 
     expect(result?.currentPlayerId).toBe("alice");
@@ -68,6 +68,7 @@ describe("play actions", () => {
       board: {
         ...createEmptyBoard(),
         [Suit.Clubs]: { min: Rank.Two, max: Rank.Queen },
+        [Suit.Spades]: { min: Rank.Ace, max: Rank.King },
       },
       players: [
         { id: "alice", hand: [card(Suit.Clubs, Rank.Ace), card(Suit.Hearts, Rank.Two)] },
@@ -115,14 +116,14 @@ describe("play actions", () => {
   test("finishes when a player plays their final card", () => {
     const game = createGame({
       players: [
-        { id: "alice", hand: [sevenOfDiamonds] },
+        { id: "alice", hand: [sevenOfSpades] },
         { id: "bob", hand: [card(Suit.Hearts, Rank.Seven)] },
-        { id: "carol", hand: [card(Suit.Spades, Rank.Seven)] },
+        { id: "carol", hand: [card(Suit.Diamonds, Rank.Seven)] },
       ],
     });
     const result = validateTurn(game, "alice", {
       type: TurnActionType.Play,
-      card: sevenOfDiamonds,
+      card: sevenOfSpades,
     });
 
     expect(result?.status).toBe(GameStatus.Finished);
@@ -141,8 +142,8 @@ describe("draw actions", () => {
     const game = createGame({
       players: [
         { id: "alice", hand: [card(Suit.Clubs, Rank.Two)] },
-        { id: "bob", hand: [sevenOfDiamonds, card(Suit.Hearts, Rank.Seven)] },
-        { id: "carol", hand: [drawnCard, card(Suit.Spades, Rank.Seven)] },
+        { id: "bob", hand: [sevenOfSpades, card(Suit.Hearts, Rank.Seven)] },
+        { id: "carol", hand: [drawnCard, card(Suit.Diamonds, Rank.Seven)] },
       ],
     });
     const pending = validateTurn(game, "alice", { type: TurnActionType.RequestDraw });
@@ -161,8 +162,8 @@ describe("draw actions", () => {
     expect(
       validateTurn(result!, "bob", {
         type: TurnActionType.Play,
-        card: sevenOfDiamonds,
-      })?.board[Suit.Diamonds],
+        card: sevenOfSpades,
+      })?.board[Suit.Spades],
     ).toEqual({ min: Rank.Seven, max: Rank.Seven });
   });
 
@@ -182,12 +183,12 @@ describe("draw actions", () => {
     const pending = validateTurn(game, "bob", { type: TurnActionType.RequestDraw });
     const result = validateTurn(pending!, "alice", {
       type: TurnActionType.GiveCard,
-      card: sevenOfDiamonds,
+      card: sevenOfSpades,
     });
 
     expect(pending?.pendingDraw?.donorId).toBe("alice");
-    expect(result?.players[0]?.hand).not.toContainEqual(sevenOfDiamonds);
-    expect(result?.players[1]?.hand).toContainEqual(sevenOfDiamonds);
+    expect(result?.players[0]?.hand).not.toContainEqual(sevenOfSpades);
+    expect(result?.players[1]?.hand).toContainEqual(sevenOfSpades);
     expect(result?.currentPlayerId).toBe("carol");
   });
 
@@ -205,7 +206,7 @@ describe("draw actions", () => {
     expect(
       validateTurn(pending!, "alice", {
         type: TurnActionType.Play,
-        card: sevenOfDiamonds,
+        card: sevenOfSpades,
       }),
     ).toBeNull();
     expect(validateTurn(pending!, "alice", { type: TurnActionType.RequestDraw })).toBeNull();
@@ -249,10 +250,10 @@ describe("draw actions", () => {
   });
 
   test("finishes with the donor as winner when they give their final card", () => {
-    const drawnCard = card(Suit.Spades, Rank.Seven);
+    const drawnCard = card(Suit.Diamonds, Rank.Seven);
     const game = createGame({
       players: [
-        { id: "alice", hand: [sevenOfDiamonds] },
+        { id: "alice", hand: [sevenOfSpades] },
         { id: "bob", hand: [card(Suit.Hearts, Rank.Seven)] },
         { id: "carol", hand: [drawnCard] },
       ],

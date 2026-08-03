@@ -1,3 +1,4 @@
+import { isJokerCard } from "./cards.js";
 import { Rank, Suit, type BoardState, type Card } from "./types.js";
 
 export function createEmptyBoard(): BoardState {
@@ -14,6 +15,10 @@ export function isBoardEmpty(board: BoardState): boolean {
 }
 
 export function placeCard(board: BoardState, card: Card): BoardState {
+  if (isJokerCard(card)) {
+    throw new TypeError("The Joker cannot be placed on the board");
+  }
+
   const suitState = board[card.suit];
   const nextSuitState =
     suitState.min === null || suitState.max === null
@@ -30,8 +35,23 @@ export function placeCard(board: BoardState, card: Card): BoardState {
 }
 
 export function isStandardPlayable(board: BoardState, card: Card): boolean {
+  if (isJokerCard(card)) {
+    return false;
+  }
+
   if (isBoardEmpty(board)) {
-    return card.suit === Suit.Diamonds && card.rank === Rank.Seven;
+    return card.suit === Suit.Spades && card.rank === Rank.Seven;
+  }
+
+  const spades = board[Suit.Spades];
+  if (
+    card.suit !== Suit.Spades &&
+    (spades.min === null ||
+      spades.max === null ||
+      card.rank < spades.min ||
+      card.rank > spades.max)
+  ) {
+    return false;
   }
 
   const suitState = board[card.suit];
