@@ -26,6 +26,11 @@ export enum SevensVariant {
   Joker = "joker",
 }
 
+export enum BotPlaystyle {
+  Random = "random",
+  Cautious = "cautious",
+}
+
 export enum GameStatus {
   Active = "active",
   Finished = "finished",
@@ -101,6 +106,15 @@ export type RandomSource = () => number;
 export interface InitializeOptions {
   readonly random?: RandomSource;
 }
+
+export interface BotStrategyOptions {
+  readonly random?: RandomSource;
+}
+
+export type BotStrategy = (
+  game: SevensGameObject,
+  actorId: string,
+) => TurnAction | null;
 
 export type PlayableCardsCalculator = (
   board: BoardState,

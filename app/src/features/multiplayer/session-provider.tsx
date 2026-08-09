@@ -1,5 +1,10 @@
 import { LanMultiplayer } from '@opengamesonline/expo-lan-multiplayer';
-import type { TurnAction } from '@opengamesonline/sevens';
+import {
+  BotPlaystyle,
+  GameStatus,
+  createBotStrategy,
+  type TurnAction,
+} from '@opengamesonline/sevens';
 import { AppState } from 'react-native';
 import {
   createContext,
@@ -14,9 +19,11 @@ import {
   createSevensParticipantMetadata,
   createSevensPolicy,
   type CreateSevensPolicyOptions,
+  type SevensPolicy,
 } from './sevens-policy';
 import type {
   SevensDiscoveredGame,
+  SevensGameEvent,
   SevensGameState,
   SevensLobbyMetadata,
   SevensMultiplayer,
@@ -25,6 +32,7 @@ import type {
   SevensSession,
   SevensSessionSnapshot,
 } from './types';
+import { SEVENS_BOT_TURN_EVENT } from './types';
 import { isSevensLobbyMetadata } from './validation';
 
 export type JoinSevensGameOptions = {
@@ -46,6 +54,8 @@ export type SevensMultiplayerContextValue = {
   refresh(): Promise<void>;
   join(options: JoinSevensGameOptions): Promise<boolean>;
   start(): Promise<void>;
+  addBot(playstyle: BotPlaystyle): Promise<void>;
+  removeBot(botId: string): Promise<void>;
   send(action: TurnAction): Promise<void>;
   leave(): Promise<void>;
   stop(): Promise<void>;
@@ -60,10 +70,14 @@ function errorMessage(cause: unknown): string {
 export function SevensMultiplayerProvider({ children }: { children: ReactNode }) {
   const multiplayerRef = useRef<SevensMultiplayer | null>(null);
   const sessionRef = useRef<SevensSession | null>(null);
+  const policyRef = useRef<SevensPolicy | null>(null);
   const unsubscribeSessionRef = useRef<(() => void) | null>(null);
   const joinAttemptRef = useRef(0);
   const discoveryGenerationRef = useRef(0);
   const sendingRef = useRef(false);
+  const botTurnInFlightRef = useRef(false);
+  const handledBotRevisionRef = useRef<number | null>(null);
+  const startingGameRef = useRef(false);
   const mountedRef = useRef(false);
   const [games, setGames] = useState<SevensDiscoveredGame[]>([]);
   const [username, setUsername] = useState('Player');
@@ -120,6 +134,7 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
       unsubscribeSessionRef.current?.();
       unsubscribeSessionRef.current = null;
       sessionRef.current = null;
+      policyRef.current = null;
       if (multiplayerRef.current === multiplayer) multiplayerRef.current = null;
       void multiplayer.dispose().catch(() => undefined);
     };
@@ -128,11 +143,64 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
   function watchSession(session: SevensSession) {
     unsubscribeSessionRef.current?.();
     sessionRef.current = session;
+    botTurnInFlightRef.current = false;
+    handledBotRevisionRef.current = null;
     unsubscribeSessionRef.current = session.subscribe((nextSnapshot) => {
       if (!mountedRef.current || sessionRef.current !== session) return;
       setSnapshot(nextSnapshot);
       if (nextSnapshot.error) setError(nextSnapshot.error);
+      maybeRunBotTurn(session, nextSnapshot);
     });
+  }
+
+  function maybeRunBotTurn(session: SevensSession, nextSnapshot: SevensSessionSnapshot) {
+    const game = nextSnapshot.state;
+    if (
+      nextSnapshot.role !== 'host' ||
+      nextSnapshot.status !== 'connected' ||
+      nextSnapshot.phase !== 'started' ||
+      !game ||
+      game.status !== GameStatus.Active ||
+      startingGameRef.current ||
+      botTurnInFlightRef.current ||
+      handledBotRevisionRef.current === nextSnapshot.revision
+    ) {
+      return;
+    }
+
+    const actorId = game.pendingDraw?.donorId ?? game.currentPlayerId;
+    const bot = game.bots.find(({ id }) => id === actorId);
+    if (!bot) return;
+
+    let action: TurnAction | null;
+    try {
+      action = createBotStrategy(bot.playstyle)(game, bot.id);
+    } catch (cause) {
+      setError(errorMessage(cause));
+      return;
+    }
+    if (!action) return;
+
+    handledBotRevisionRef.current = nextSnapshot.revision;
+    botTurnInFlightRef.current = true;
+    const event: SevensGameEvent = {
+      type: SEVENS_BOT_TURN_EVENT,
+      botId: bot.id,
+      action,
+    };
+    void session
+      .sendGameEvent(event)
+      .catch((cause) => {
+        if (mountedRef.current && sessionRef.current === session) {
+          setError(errorMessage(cause));
+        }
+      })
+      .finally(() => {
+        botTurnInFlightRef.current = false;
+        if (mountedRef.current && sessionRef.current === session) {
+          maybeRunBotTurn(session, session.snapshot);
+        }
+      });
   }
 
   function clearSession(session?: SevensSession) {
@@ -140,6 +208,10 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
     unsubscribeSessionRef.current?.();
     unsubscribeSessionRef.current = null;
     sessionRef.current = null;
+    policyRef.current = null;
+    botTurnInFlightRef.current = false;
+    handledBotRevisionRef.current = null;
+    startingGameRef.current = false;
     if (mountedRef.current) setSnapshot(null);
   }
 
@@ -190,11 +262,13 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
     setBusy(true);
     setError(null);
     try {
-      const session = await multiplayer.createGame(createSevensPolicy(options));
+      const policy = createSevensPolicy(options);
+      const session = await multiplayer.createGame(policy);
       if (!mountedRef.current || attempt !== joinAttemptRef.current) {
         await session.leaveGame();
         return false;
       }
+      policyRef.current = policy;
       watchSession(session);
       return true;
     } catch (cause) {
@@ -258,7 +332,7 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
       if (!isSevensLobbyMetadata(game.lobbyMetadata)) {
         throw new Error('This game is not compatible with this version of Sevens');
       }
-      const session = await multiplayer.joinGame<SevensGameState, TurnAction>({
+      const session = await multiplayer.joinGame<SevensGameState, SevensGameEvent>({
         service: game,
         participantName,
         participantMetadata: createSevensParticipantMetadata(role),
@@ -289,8 +363,58 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
     if (!session) return;
     setBusy(true);
     setError(null);
+    startingGameRef.current = true;
     try {
       await session.startGame();
+      startingGameRef.current = false;
+      maybeRunBotTurn(session, session.snapshot);
+    } catch (cause) {
+      if (mountedRef.current) setError(errorMessage(cause));
+    } finally {
+      startingGameRef.current = false;
+      if (mountedRef.current) setBusy(false);
+    }
+  }
+
+  async function addBot(playstyle: BotPlaystyle) {
+    const session = sessionRef.current;
+    const policy = policyRef.current;
+    if (
+      !session ||
+      !policy ||
+      session.snapshot.role !== 'host' ||
+      session.snapshot.phase !== 'lobby'
+    ) return;
+    setBusy(true);
+    setError(null);
+    let botId: string | null = null;
+    try {
+      botId = policy.addBot(playstyle, session.snapshot.participants).id;
+      await session.refreshLobbyMetadata();
+    } catch (cause) {
+      if (botId) {
+        policy.removeBot(botId);
+        await session.refreshLobbyMetadata().catch(() => undefined);
+      }
+      if (mountedRef.current) setError(errorMessage(cause));
+    } finally {
+      if (mountedRef.current) setBusy(false);
+    }
+  }
+
+  async function removeBot(botId: string) {
+    const session = sessionRef.current;
+    const policy = policyRef.current;
+    if (
+      !session ||
+      !policy ||
+      session.snapshot.role !== 'host' ||
+      session.snapshot.phase !== 'lobby'
+    ) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (policy.removeBot(botId)) await session.refreshLobbyMetadata();
     } catch (cause) {
       if (mountedRef.current) setError(errorMessage(cause));
     } finally {
@@ -363,6 +487,8 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
         refresh,
         join,
         start,
+        addBot,
+        removeBot,
         send,
         leave,
         stop,

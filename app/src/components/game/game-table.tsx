@@ -115,7 +115,9 @@ export function GameTable({
   }
 
   const missingPlayer = game.players.find(
-    ({ id }) => !snapshot.participants.some((participant) => participant.id === id),
+    ({ id }) =>
+      !game.bots.some((bot) => bot.id === id) &&
+      !snapshot.participants.some((participant) => participant.id === id),
   );
   const turnStatus =
     game.status === GameStatus.Finished

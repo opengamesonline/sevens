@@ -120,6 +120,20 @@ The Joker variant follows all standard rules, including the mandatory seven-of-s
 
 After the opening, the Joker can assist one atomic play. The actor must hold the Joker and a selected standard card exactly one rank beyond a bridge card of the same suit. The bridge must be currently playable under standard rules and held by another player; the selected card must be standard-playable after hypothetically placing the bridge. Playing the selected card removes it and the Joker from the actor, removes the bridge from its holder, places the bridge and selected card in that order, and gives the Joker to the bridge holder. If the actor holds the bridge, or either card fails the matching-spade gate, assistance is invalid. Normal plays never consume or transfer the Joker.
 
+## Bot strategies
+
+`createBotStrategy` is a functional factory that returns a pure decision function. The function chooses an action but does not apply it; pass its result through `validateTurn` using the bot's player ID.
+
+```ts
+import { BotPlaystyle, createBotStrategy, validateTurn } from "@opengamesonline/sevens";
+
+const chooseAction = createBotStrategy(BotPlaystyle.Cautious);
+const action = chooseAction(game, botId);
+const nextGame = action ? validateTurn(game, botId, action) : null;
+```
+
+The random playstyle chooses among valid moves and requests a draw only when none are available. The cautious playstyle first prefers cards that advance toward another card in its own hand, such as opening a suit or extending a run it can continue. If no such play exists, it chooses from every valid move rather than drawing. Both playstyles choose a random owned card when acting as a draw donor and support an injected random source through `{ random }` for deterministic simulations.
+
 ## Development
 
 ```bash

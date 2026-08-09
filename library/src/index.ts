@@ -1,4 +1,5 @@
 export { createEmptyBoard, isBoardEmpty, isStandardPlayable, placeCard } from "./board.js";
+export { createBotStrategy } from "./bots.js";
 export {
   CARD_RANKS,
   CARD_SUITS,
@@ -13,6 +14,7 @@ export { createFinalScores } from "./scoring.js";
 export { validateTurn } from "./turns.js";
 export { getPlayableCards, getVariantRules } from "./variants.js";
 export {
+  BotPlaystyle,
   GameStatus,
   Rank,
   SevensVariant,
@@ -21,6 +23,8 @@ export {
 } from "./types.js";
 export type {
   BoardState,
+  BotStrategy,
+  BotStrategyOptions,
   Card,
   FinalScore,
   GiveCardAction,

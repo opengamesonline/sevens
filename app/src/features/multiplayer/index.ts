@@ -2,7 +2,7 @@ export {
   createSevensParticipantMetadata,
   createSevensPolicy,
 } from './sevens-policy';
-export type { CreateSevensPolicyOptions } from './sevens-policy';
+export type { CreateSevensPolicyOptions, SevensPolicy } from './sevens-policy';
 export {
   selectOpponents,
   selectOwnHand,
@@ -24,10 +24,14 @@ export {
   MAX_SEVENS_PLAYERS,
   MIN_SEVENS_PLAYERS,
   SEVENS_APP_ID,
+  SEVENS_BOT_TURN_EVENT,
   SEVENS_GAME_VERSION,
 } from './types';
 export type {
   SevensDiscoveredGame,
+  SevensBot,
+  SevensBotTurnEvent,
+  SevensGameEvent,
   SevensGameState,
   SevensLobbyMetadata,
   SevensMultiplayer,
@@ -37,6 +41,7 @@ export type {
   SevensSessionSnapshot,
 } from './types';
 export {
+  isSevensBotTurnEvent,
   isSevensLobbyMetadata,
   isSevensParticipantMetadata,
   isSevensParticipantRole,

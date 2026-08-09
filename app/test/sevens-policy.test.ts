@@ -4,6 +4,7 @@ import test from 'node:test';
 import type { Participant } from '@opengamesonline/expo-lan-multiplayer';
 import {
   GameStatus,
+  BotPlaystyle,
   JOKER_CARD,
   Rank,
   SevensVariant,
@@ -19,11 +20,15 @@ import {
   createSevensParticipantMetadata,
   createSevensPolicy,
 } from '../src/features/multiplayer/sevens-policy';
+import { SEVENS_BOT_TURN_EVENT } from '../src/features/multiplayer/types';
 import type {
   SevensGameState,
   SevensParticipantMetadata,
 } from '../src/features/multiplayer/types';
-import { isTurnAction } from '../src/features/multiplayer/validation';
+import {
+  isSevensLobbyMetadata,
+  isTurnAction,
+} from '../src/features/multiplayer/validation';
 
 function participant(
   id: string,
@@ -70,11 +75,12 @@ test('computes role-aware lobby metadata and enforces lobby policy', () => {
 
   assert.deepEqual(policy.getLobbyMetadata(participants), {
     appId: 'com.opengamesonline.sevens',
-    gameVersion: 1,
+    gameVersion: 2,
     playerCount: 3,
     spectatorCount: 1,
     minPlayers: 3,
     maxPlayers: 3,
+    bots: [],
     showPlayableCards: true,
     variant: SevensVariant.Joker,
   });
@@ -101,6 +107,87 @@ test('computes role-aware lobby metadata and enforces lobby policy', () => {
   );
   assert.match(policy.validateStart?.([alice, bob]) ?? '', /At least 3/);
   assert.equal(policy.validateStart?.([alice, bob, carol]), null);
+});
+
+test('adds strategy-configured bots to lobby capacity and the initialized roster', () => {
+  const policy = createSevensPolicy({
+    gameName: 'Bot Table',
+    participantName: alice.name,
+    role: 'player',
+    maxPlayers: 3,
+    showPlayableCards: false,
+  });
+
+  const cautious = policy.addBot(BotPlaystyle.Cautious, [alice]);
+  const random = policy.addBot(BotPlaystyle.Random, [alice]);
+  const lobby = policy.getLobbyMetadata([alice]);
+
+  assert.equal(lobby.playerCount, 3);
+  assert.deepEqual(lobby.bots, [cautious, random]);
+  assert.equal(isSevensLobbyMetadata(JSON.parse(JSON.stringify(lobby))), true);
+  assert.equal(isSevensLobbyMetadata({ ...lobby, gameVersion: 1 }), false);
+  assert.equal(
+    isSevensLobbyMetadata({
+      ...lobby,
+      bots: [{ ...cautious, playstyle: 'unsupported' }],
+    }),
+    false,
+  );
+  assert.equal(policy.validateStart?.([alice]), null);
+  assert.match(
+    policy.validateJoin?.(participant('bob-2', 'Another player', 'player', 1), [alice]) ?? '',
+    /roster is full/,
+  );
+
+  const game = policy.createInitialState([alice]);
+  assert.deepEqual(game.bots, [cautious, random]);
+  assert.deepEqual(game.players.map(({ id }) => id), [alice.id, cautious.id, random.id]);
+  assert.equal(game.players.flatMap(({ hand }) => hand).length, 52);
+
+  assert.equal(policy.removeBot(cautious.id), true);
+  assert.equal(policy.getLobbyMetadata([alice]).playerCount, 2);
+  assert.equal(policy.removeBot(cautious.id), false);
+});
+
+test('only accepts bot actions attributed to the host', () => {
+  const policy = createSevensPolicy({
+    gameName: 'Bot Table',
+    participantName: host.name,
+    role: 'spectator',
+    maxPlayers: 3,
+    showPlayableCards: false,
+  });
+  const bot = {
+    id: 'sevens-bot-1',
+    name: 'Bot 1',
+    playstyle: BotPlaystyle.Random,
+  };
+  const openingCard = { suit: Suit.Spades, rank: Rank.Seven } as const;
+  const game: SevensGameState = {
+    variant: SevensVariant.Standard,
+    status: GameStatus.Active,
+    board: createEmptyBoard(),
+    players: [
+      { id: bot.id, hand: [openingCard, { suit: Suit.Clubs, rank: Rank.Two }] },
+      { id: alice.id, hand: [{ suit: Suit.Hearts, rank: Rank.Seven }] },
+      { id: bob.id, hand: [{ suit: Suit.Diamonds, rank: Rank.Seven }] },
+    ],
+    currentPlayerId: bot.id,
+    pendingDraw: null,
+    winnerId: null,
+    lastIllegalMovePlayerId: null,
+    bots: [bot],
+  };
+  const event = {
+    type: SEVENS_BOT_TURN_EVENT,
+    botId: bot.id,
+    action: { type: TurnActionType.Play, card: openingCard },
+  } as const;
+
+  assert.equal(policy.reduceEvent(game, event, alice), game);
+  const result = policy.reduceEvent(game, event, host);
+  assert.deepEqual(result.board[Suit.Spades], { min: Rank.Seven, max: Rank.Seven });
+  assert.deepEqual(result.bots, [bot]);
 });
 
 test('applies a serialized Joker bridge play through the host policy', () => {
@@ -142,6 +229,7 @@ test('applies a serialized Joker bridge play through the host policy', () => {
     pendingDraw: null,
     winnerId: null,
     lastIllegalMovePlayerId: null,
+    bots: [],
   };
   const serializedGame = JSON.parse(JSON.stringify(game)) as SevensGameState;
   const serializedAction = JSON.parse(

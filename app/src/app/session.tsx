@@ -1,7 +1,7 @@
-import { SevensVariant } from '@opengamesonline/sevens';
+import { BotPlaystyle, SevensVariant } from '@opengamesonline/sevens';
 import { router } from 'expo-router';
-import { useEffect, useEffectEvent } from 'react';
-import { Alert, BackHandler, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useEffectEvent, useState } from 'react';
+import { Alert, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GameTable } from '@/components/game/game-table';
 import {
@@ -15,8 +15,23 @@ import {
 import { GameColors } from '@/constants/theme';
 import { useSevensMultiplayer } from '@/features/multiplayer';
 
+const botPlaystyles = [
+  {
+    value: BotPlaystyle.Random,
+    label: 'Random',
+    description: 'Chooses any valid move.',
+  },
+  {
+    value: BotPlaystyle.Cautious,
+    label: 'Cautious',
+    description: 'Keeps useful runs for itself.',
+  },
+] as const;
+
 export default function SessionScreen() {
-  const { busy, error, leave, send, sending, snapshot, start } = useSevensMultiplayer();
+  const { addBot, busy, error, leave, removeBot, send, sending, snapshot, start } =
+    useSevensMultiplayer();
+  const [botPlaystyle, setBotPlaystyle] = useState(BotPlaystyle.Random);
 
   async function leaveSession() {
     await leave();
@@ -88,6 +103,7 @@ export default function SessionScreen() {
   const isHost = snapshot.role === 'host';
   const canStart = Boolean(lobby && lobby.playerCount >= lobby.minPlayers);
   const disconnected = snapshot.status === 'disconnected' || snapshot.status === 'left';
+  const lobbyFull = Boolean(lobby && lobby.playerCount >= lobby.maxPlayers);
 
   return (
     <RoomScreen>
@@ -108,7 +124,7 @@ export default function SessionScreen() {
               {disconnected
                 ? 'Return home to create or find another game.'
                 : isHost
-                  ? 'Start when at least three players have taken a seat.'
+                  ? 'Add bots or wait for players, then start with at least three seats filled.'
                   : 'The cards will be dealt when the host starts.'}
             </Text>
           </View>
@@ -146,7 +162,62 @@ export default function SessionScreen() {
               </View>
             );
           })}
+          {lobby?.bots.map((bot) => (
+            <View key={bot.id} style={styles.participant}>
+              <View style={[styles.roleMark, styles.botMark]}>
+                <Text style={styles.roleMarkText}>B</Text>
+              </View>
+              <View style={styles.botCopy}>
+                <Text style={styles.participantName}>{bot.name}</Text>
+                <Text style={styles.botPlaystyle}>{bot.playstyle.toUpperCase()} BOT</Text>
+              </View>
+              {!disconnected && isHost ? (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={busy}
+                  onPress={() => void removeBot(bot.id)}
+                  style={styles.removeBot}
+                >
+                  <Text style={styles.removeBotText}>REMOVE</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ))}
         </View>
+
+        {!disconnected && isHost ? (
+          <View style={styles.botControls}>
+            <View>
+              <Text style={styles.botControlLabel}>ADD A BOT</Text>
+              <Text style={styles.botControlHint}>Choose how the next bot will play.</Text>
+            </View>
+            <View style={styles.botOptions}>
+              {botPlaystyles.map((option) => {
+                const selected = option.value === botPlaystyle;
+                return (
+                  <Pressable
+                    key={option.value}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    onPress={() => setBotPlaystyle(option.value)}
+                    style={[styles.botOption, selected && styles.selectedBotOption]}
+                  >
+                    <Text style={[styles.botOptionName, selected && styles.selectedBotOptionName]}>
+                      {option.label}
+                    </Text>
+                    <Text style={styles.botOptionDescription}>{option.description}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <RoomButton
+              label={lobbyFull ? 'Player seats full' : `Add ${botPlaystyle} bot`}
+              compact
+              disabled={busy || lobbyFull}
+              onPress={() => void addBot(botPlaystyle)}
+            />
+          </View>
+        ) : null}
 
         {lobby ? (
           <Text style={styles.lobbySummary}>
@@ -155,6 +226,8 @@ export default function SessionScreen() {
               : `Need ${lobby.minPlayers - lobby.playerCount} more player${lobby.minPlayers - lobby.playerCount === 1 ? '' : 's'}`}
             {' · '}
             {lobby.spectatorCount} watching
+            {' · '}
+            {lobby.bots.length} bot{lobby.bots.length === 1 ? '' : 's'}
             {' · '}
             {lobby.variant === SevensVariant.Joker ? 'joker' : 'standard'}
             {' · '}
@@ -217,8 +290,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   spectatorMark: { backgroundColor: GameColors.feltLight, borderWidth: 1, borderColor: GameColors.border },
+  botMark: { backgroundColor: GameColors.creamMuted },
   roleMarkText: { color: GameColors.feltDeep, fontWeight: '900' },
   participantName: { flex: 1, color: GameColors.white, fontSize: 15, fontWeight: '600' },
+  botCopy: { flex: 1 },
+  botPlaystyle: { color: GameColors.whiteMuted, fontSize: 9, fontWeight: '800', marginTop: 2 },
+  removeBot: { paddingHorizontal: 4, paddingVertical: 8 },
+  removeBotText: { color: GameColors.danger, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   badges: { flexDirection: 'row', gap: 5 },
   badge: {
     color: GameColors.gold,
@@ -232,6 +310,30 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   lobbySummary: { color: GameColors.creamMuted, textAlign: 'center', fontSize: 13 },
+  botControls: {
+    gap: 10,
+    borderTopWidth: 1,
+    borderTopColor: GameColors.border,
+    paddingTop: 14,
+  },
+  botControlLabel: { color: GameColors.gold, fontSize: 11, fontWeight: '900', letterSpacing: 1.4 },
+  botControlHint: { color: GameColors.whiteMuted, fontSize: 11, marginTop: 3 },
+  botOptions: { flexDirection: 'row', gap: 8 },
+  botOption: {
+    flex: 1,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: GameColors.border,
+    padding: 9,
+    backgroundColor: 'rgba(246,240,223,0.04)',
+  },
+  selectedBotOption: {
+    borderColor: GameColors.gold,
+    backgroundColor: 'rgba(215,174,90,0.13)',
+  },
+  botOptionName: { color: GameColors.creamMuted, fontSize: 13, fontWeight: '800' },
+  selectedBotOptionName: { color: GameColors.gold },
+  botOptionDescription: { color: GameColors.whiteMuted, fontSize: 10, lineHeight: 14, marginTop: 2 },
   hostWait: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 9, padding: 10 },
   hostWaitText: { color: GameColors.whiteMuted, fontSize: 13 },
 });

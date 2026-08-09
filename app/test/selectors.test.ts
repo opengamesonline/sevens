@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import type { Participant } from '@opengamesonline/expo-lan-multiplayer';
 import {
+  BotPlaystyle,
   JOKER_CARD,
   Rank,
   SevensVariant,
@@ -43,6 +44,7 @@ const game = {
     random: () => 0.2,
   }),
   lastIllegalMovePlayerId: null,
+  bots: [],
 };
 
 function snapshot(selfIndex: number): SevensSessionSnapshot {
@@ -56,11 +58,12 @@ function snapshot(selfIndex: number): SevensSessionSnapshot {
     participants,
     lobbyMetadata: {
       appId: 'com.opengamesonline.sevens',
-      gameVersion: 1,
+      gameVersion: 2,
       playerCount: 3,
       spectatorCount: 1,
       minPlayers: 3,
       maxPlayers: 4,
+      bots: [],
       showPlayableCards: false,
       variant: SevensVariant.Standard,
     },
@@ -94,6 +97,29 @@ test('spectator selector exposes no hand and counts every seated player', () => 
     ['spades', 'diamonds', 'clubs', 'hearts'],
   );
   assert.equal(suitRuns.every(({ cards }) => cards.length === 0), true);
+});
+
+test('selectors include bot names without exposing a bot as the local hand', () => {
+  const bot = {
+    id: 'sevens-bot-1',
+    name: 'Bot 1',
+    playstyle: BotPlaystyle.Cautious,
+  };
+  const botSnapshot: SevensSessionSnapshot = {
+    ...snapshot(0),
+    state: {
+      ...game,
+      players: [game.players[0]!, game.players[1]!, { id: bot.id, hand: game.players[2]!.hand }],
+      bots: [bot],
+    },
+    lobbyMetadata: {
+      ...snapshot(0).lobbyMetadata!,
+      bots: [bot],
+    },
+  };
+
+  assert.equal(selectOwnHand(botSnapshot)?.length, game.players[0]!.hand.length);
+  assert.equal(selectOpponents(botSnapshot).find(({ id }) => id === bot.id)?.name, 'Bot 1');
 });
 
 test('hidden hints allow an illegal play attempt without revealing the card', () => {

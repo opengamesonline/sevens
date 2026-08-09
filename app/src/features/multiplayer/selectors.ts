@@ -26,7 +26,10 @@ export function selectParticipantNames(
 ): Readonly<Record<string, string>> {
   if (!snapshot) return {};
   return Object.fromEntries(
-    snapshot.participants.map(({ id, name }) => [id, name]),
+    [
+      ...snapshot.participants.map(({ id, name }) => [id, name] as const),
+      ...(snapshot.state?.bots ?? []).map(({ id, name }) => [id, name] as const),
+    ],
   );
 }
 
@@ -35,7 +38,7 @@ export function selectParticipantName(
   participantId: string | null,
 ): string | null {
   if (!snapshot || !participantId) return null;
-  return snapshot.participants.find(({ id }) => id === participantId)?.name ?? null;
+  return selectParticipantNames(snapshot)[participantId] ?? null;
 }
 
 export function selectOwnHand(snapshot: SevensSessionSnapshot | null): readonly Card[] | null {

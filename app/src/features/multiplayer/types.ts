@@ -4,17 +4,39 @@ import type {
   LanMultiplayer,
   SessionSnapshot,
 } from '@opengamesonline/expo-lan-multiplayer';
-import type { SevensGameObject, SevensVariant, TurnAction } from '@opengamesonline/sevens';
+import type {
+  BotPlaystyle,
+  SevensGameObject,
+  SevensVariant,
+  TurnAction,
+} from '@opengamesonline/sevens';
 
 export const SEVENS_APP_ID = 'com.opengamesonline.sevens' as const;
-export const SEVENS_GAME_VERSION = 1 as const;
+export const SEVENS_GAME_VERSION = 2 as const;
 export const MIN_SEVENS_PLAYERS = 3 as const;
 export const MAX_SEVENS_PLAYERS = 7 as const;
 
 export type SevensParticipantRole = 'player' | 'spectator';
 
+export const SEVENS_BOT_TURN_EVENT = 'botTurn' as const;
+
+export type SevensBot = {
+  id: string;
+  name: string;
+  playstyle: BotPlaystyle;
+};
+
+export type SevensBotTurnEvent = {
+  type: typeof SEVENS_BOT_TURN_EVENT;
+  botId: string;
+  action: TurnAction;
+};
+
+export type SevensGameEvent = TurnAction | SevensBotTurnEvent;
+
 export type SevensGameState = SevensGameObject & {
   readonly lastIllegalMovePlayerId: string | null;
+  readonly bots: readonly SevensBot[];
 };
 
 export type SevensParticipantMetadata = {
@@ -30,6 +52,7 @@ export type SevensLobbyMetadata = {
   spectatorCount: number;
   minPlayers: typeof MIN_SEVENS_PLAYERS;
   maxPlayers: number;
+  bots: SevensBot[];
   showPlayableCards: boolean;
   variant: SevensVariant;
 };
@@ -41,7 +64,7 @@ export type SevensMultiplayer = LanMultiplayer<
 
 export type SevensSession = GameSession<
   SevensGameState,
-  TurnAction,
+  SevensGameEvent,
   SevensParticipantMetadata,
   SevensLobbyMetadata
 >;

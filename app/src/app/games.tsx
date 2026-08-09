@@ -118,6 +118,7 @@ export default function GamesScreen() {
                       <Text style={styles.gameName}>{game.name}</Text>
                       <Text style={styles.gameMeta}>
                         {game.lobbyMetadata.playerCount}/{game.lobbyMetadata.maxPlayers} PLAYERS ·{' '}
+                        {game.lobbyMetadata.bots.length} BOTS ·{' '}
                         {game.lobbyMetadata.spectatorCount} WATCHING
                       </Text>
                       <Text style={styles.hintMeta}>
