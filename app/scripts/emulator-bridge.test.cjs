@@ -16,14 +16,17 @@ test('uses a sidecar-specific hostname for proxy advertisements', () => {
 });
 
 test('keeps the multiplayer advertisement format for bridge services', () => {
-  const name = bridgedServiceName('Tile Clash~abc123~def456', 'emulator-5554');
+  const name = bridgedServiceName(
+    'Tile Clash~abc123def456~2~1~def456',
+    'emulator-5554'
+  );
 
   assert.match(
     name,
-    /^Tile Clash \[bridge emulator-5554\]~[a-z0-9]{6}~[a-z0-9]{6}$/
+    /^Tile Clash \[bridge emulator-5554\]~abc123def456~2~1~[a-z0-9]{6}$/
   );
   assert.equal(isBridgeService({ name }), true);
-  assert.equal(isBridgeService({ name: 'Tile Clash~abc123~def456' }), false);
+  assert.equal(isBridgeService({ name: 'Tile Clash~abc123def456~2~1~def456' }), false);
 });
 
 test('parses all online Android emulators from adb output', () => {

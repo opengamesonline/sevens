@@ -74,6 +74,11 @@ function snapshot(selfIndex: number): SevensSessionSnapshot {
       variant: SevensVariant.Standard,
     },
     error: null,
+    tableId: 'table-123456',
+    authorityTerm: 1,
+    hostParticipantId: participants[0]!.id,
+    hostOrder: participants.map(({ id }) => id),
+    connectedParticipantIds: participants.map(({ id }) => id),
   };
 }
 

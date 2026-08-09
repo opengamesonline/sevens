@@ -37,6 +37,7 @@ export type {
   SevensMultiplayer,
   SevensParticipantMetadata,
   SevensParticipantRole,
+  SevensRecoveryState,
   SevensScore,
   SevensSession,
   SevensSessionSnapshot,

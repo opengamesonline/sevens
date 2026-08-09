@@ -7,6 +7,7 @@
     "@opengamesonline/expo-lan-multiplayer": "file:../submodules/expo-lan/expo-lan-multiplayer",
     "@opengamesonline/expo-lan-sockets": "file:../submodules/expo-lan/expo-lan-sockets",
     "@opengamesonline/sevens": "file:../library",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.9",
     "expo-constants": "~57.0.8",
     "expo-dev-client": "~57.0.10",

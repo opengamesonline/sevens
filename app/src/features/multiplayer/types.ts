@@ -3,6 +3,7 @@ import type {
   GameSession,
   LanMultiplayer,
   SessionSnapshot,
+  SessionRecoveryState,
 } from '@opengamesonline/expo-lan-multiplayer';
 import type {
   BotPlaystyle,
@@ -82,6 +83,12 @@ export type SevensSession = GameSession<
 >;
 
 export type SevensSessionSnapshot = SessionSnapshot<
+  SevensGameState,
+  SevensParticipantMetadata,
+  SevensLobbyMetadata
+>;
+
+export type SevensRecoveryState = SessionRecoveryState<
   SevensGameState,
   SevensParticipantMetadata,
   SevensLobbyMetadata

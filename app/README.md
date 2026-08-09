@@ -22,6 +22,8 @@ After the development client is installed, start Metro on the LAN with `npm star
 
 Native dependency or app configuration changes require rebuilding the development client.
 
+The app persists active table recovery snapshots with AsyncStorage. Temporary disconnects, background suspension, and process restarts attempt to recover the same participant identity automatically. If the host disappears, devices use the table's participant order and authority term to select and advertise a replacement host. Explicitly leaving or closing a table deletes the local recovery record.
+
 ## Emulator Bridge
 
 Android emulators advertise LAN games on their virtual networks. To expose those games to an iOS simulator or device on the Mac's network, start the bridge in a separate terminal:

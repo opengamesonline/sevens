@@ -36,6 +36,10 @@ export type CreateSevensPolicyOptions = {
   maxPlayers: number;
   showPlayableCards: boolean;
   variant?: SevensVariant;
+  recovery?: {
+    lobbyMetadata: SevensLobbyMetadata;
+    participants: readonly Participant<SevensParticipantMetadata>[];
+  };
 };
 
 export type SevensPolicy = CreateGameOptions<
@@ -88,23 +92,37 @@ export function createSevensPolicy({
   maxPlayers,
   showPlayableCards,
   variant = SevensVariant.Standard,
+  recovery,
 }: CreateSevensPolicyOptions): SevensPolicy {
+  const restoredLobby = recovery?.lobbyMetadata;
+  const policyMaxPlayers = restoredLobby?.maxPlayers ?? maxPlayers;
+  const policyShowPlayableCards = restoredLobby?.showPlayableCards ?? showPlayableCards;
+  const policyVariant = restoredLobby?.variant ?? variant;
   if (
-    !Number.isInteger(maxPlayers) ||
-    maxPlayers < MIN_SEVENS_PLAYERS ||
-    maxPlayers > MAX_SEVENS_PLAYERS
+    !Number.isInteger(policyMaxPlayers) ||
+    policyMaxPlayers < MIN_SEVENS_PLAYERS ||
+    policyMaxPlayers > MAX_SEVENS_PLAYERS
   ) {
     throw new RangeError(
       `Maximum players must be between ${MIN_SEVENS_PLAYERS} and ${MAX_SEVENS_PLAYERS}`,
     );
   }
 
-  let bots: SevensBot[] = [];
-  let nextBotNumber = 1;
-  let roundsPlayed = 0;
-  let latestScores: SevensScore[] = [];
-  let cumulativeScores: SevensScore[] = [];
-  let roundPlayerNames = new Map<string, string>();
+  let bots: SevensBot[] = restoredLobby?.bots.map((bot) => ({ ...bot })) ?? [];
+  let nextBotNumber =
+    Math.max(
+      0,
+      ...bots.map(({ id }) => Number.parseInt(id.replace('sevens-bot-', ''), 10) || 0),
+    ) + 1;
+  let roundsPlayed = restoredLobby?.roundsPlayed ?? 0;
+  let latestScores: SevensScore[] =
+    restoredLobby?.latestScores.map((score) => ({ ...score })) ?? [];
+  let cumulativeScores: SevensScore[] =
+    restoredLobby?.cumulativeScores.map((score) => ({ ...score })) ?? [];
+  let roundPlayerNames = new Map<string, string>([
+    ...(recovery?.participants.map(({ id, name }) => [id, name] as const) ?? []),
+    ...bots.map(({ id, name }) => [id, name] as const),
+  ]);
 
   return {
     name: gameName,
@@ -114,7 +132,7 @@ export function createSevensPolicy({
       if (!Object.values(BotPlaystyle).includes(playstyle)) {
         throw new RangeError(`Unsupported bot playstyle: ${String(playstyle)}`);
       }
-      if (players(participants).length + bots.length >= maxPlayers) {
+      if (players(participants).length + bots.length >= policyMaxPlayers) {
         throw new Error('The player roster is full');
       }
 
@@ -147,7 +165,7 @@ export function createSevensPolicy({
         ...bots.map(({ id, name }) => [id, name] as const),
       ]);
       return {
-        ...initializeSevens(playerIds, variant),
+        ...initializeSevens(playerIds, policyVariant),
         lastIllegalMovePlayerId: null,
         bots: bots.map((bot) => ({ ...bot })),
         roundNumber: roundsPlayed + 1,
@@ -162,13 +180,13 @@ export function createSevensPolicy({
         playerCount: players(participants).length + bots.length,
         spectatorCount: spectators(participants).length,
         minPlayers: MIN_SEVENS_PLAYERS,
-        maxPlayers,
+        maxPlayers: policyMaxPlayers,
         bots: bots.map((bot) => ({ ...bot })),
         roundsPlayed,
         latestScores: latestScores.map((score) => ({ ...score })),
         cumulativeScores: cumulativeScores.map((score) => ({ ...score })),
-        showPlayableCards,
-        variant,
+        showPlayableCards: policyShowPlayableCards,
+        variant: policyVariant,
       };
     },
     validateJoin(candidate, participants) {
@@ -187,20 +205,26 @@ export function createSevensPolicy({
 
       if (
         candidate.metadata.role === 'player' &&
-        players(participants).length + bots.length >= maxPlayers
+        players(participants).length + bots.length >= policyMaxPlayers
       ) {
         return 'The player roster is full';
       }
 
       return null;
     },
-    validateStart(participants) {
+    validateStart(participants, connectedParticipantIds) {
       const playerCount = players(participants).length + bots.length;
+      if (
+        connectedParticipantIds &&
+        players(participants).some(({ id }) => !connectedParticipantIds.has(id))
+      ) {
+        return 'All players must reconnect before starting';
+      }
       return playerCount < MIN_SEVENS_PLAYERS
         ? `At least ${MIN_SEVENS_PLAYERS} players are required to start`
         : null;
     },
-    reduceEvent(game, event, participant) {
+    reduceEvent(game, event, participant, context) {
       let actorId: string;
       let action: TurnAction;
       if (
@@ -211,7 +235,7 @@ export function createSevensPolicy({
         actorId = participant.id;
         action = event;
       } else if (
-        participant.slot === 0 &&
+        context.authoritativeHost &&
         isSevensBotTurnEvent(event) &&
         game.bots.some(({ id }) => id === event.botId)
       ) {

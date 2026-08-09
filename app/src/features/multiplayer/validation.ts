@@ -2,6 +2,7 @@ import {
   CARD_RANKS,
   CARD_SUITS,
   BotPlaystyle,
+  GameStatus,
   SevensVariant,
   TurnActionType,
   type Card,
@@ -20,6 +21,7 @@ import {
   type SevensBotTurnEvent,
   type SevensParticipantMetadata,
   type SevensParticipantRole,
+  type SevensGameState,
   type SevensScore,
 } from './types';
 
@@ -117,6 +119,59 @@ function isCard(value: unknown): value is Card {
   return (
     CARD_SUITS.includes(value.suit as StandardCard['suit']) &&
     CARD_RANKS.includes(value.rank as StandardCard['rank'])
+  );
+}
+
+export function isSevensGameState(value: unknown): value is SevensGameState {
+  if (!isRecord(value) || !isRecord(value.board) || !Array.isArray(value.players)) {
+    return false;
+  }
+  const board = value.board;
+  const players = value.players;
+  const playerIds = players.flatMap((player) =>
+    isRecord(player) && typeof player.id === 'string' ? [player.id] : []);
+  const bots = Array.isArray(value.bots) ? value.bots : null;
+  const latestScores = Array.isArray(value.latestScores) ? value.latestScores : null;
+  const cumulativeScores = Array.isArray(value.cumulativeScores) ? value.cumulativeScores : null;
+  const validPlayerId = (id: unknown) => typeof id === 'string' && playerIds.includes(id);
+  const pendingDraw = value.pendingDraw;
+  return (
+    Object.values(SevensVariant).includes(value.variant as SevensVariant) &&
+    Object.values(GameStatus).includes(value.status as GameStatus) &&
+    CARD_SUITS.every((suit) => {
+      const lane = board[suit];
+      return isRecord(lane) &&
+        (lane.min === null || CARD_RANKS.includes(lane.min as StandardCard['rank'])) &&
+        (lane.max === null || CARD_RANKS.includes(lane.max as StandardCard['rank']));
+    }) &&
+    players.length >= MIN_SEVENS_PLAYERS &&
+    players.length <= MAX_SEVENS_PLAYERS &&
+    players.every((player) =>
+      isRecord(player) &&
+      typeof player.id === 'string' &&
+      player.id.length > 0 &&
+      Array.isArray(player.hand) &&
+      player.hand.every(isCard)) &&
+    playerIds.length === players.length &&
+    new Set(playerIds).size === playerIds.length &&
+    validPlayerId(value.currentPlayerId) &&
+    (value.winnerId === null || validPlayerId(value.winnerId)) &&
+    (pendingDraw === null ||
+      (isRecord(pendingDraw) &&
+        validPlayerId(pendingDraw.requesterId) &&
+        validPlayerId(pendingDraw.donorId) &&
+        pendingDraw.requesterId !== pendingDraw.donorId)) &&
+    (value.lastIllegalMovePlayerId === null || validPlayerId(value.lastIllegalMovePlayerId)) &&
+    bots !== null &&
+    bots.every(isSevensBot) &&
+    new Set(bots.map((bot) => bot.id)).size === bots.length &&
+    bots.every((bot) => playerIds.includes(bot.id)) &&
+    Number.isInteger(value.roundNumber) &&
+    (value.roundNumber as number) >= 1 &&
+    latestScores !== null &&
+    latestScores.every(isSevensScore) &&
+    cumulativeScores !== null &&
+    cumulativeScores.every(isSevensScore)
   );
 }
 

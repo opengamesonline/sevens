@@ -40,15 +40,19 @@ export function GameTable({
   snapshot,
   actionPending,
   continuePending,
+  reconnecting,
   onSend,
   onContinue,
+  onRetryConnection,
   onLeave,
 }: {
   snapshot: SevensSessionSnapshot;
   actionPending: boolean;
   continuePending: boolean;
+  reconnecting: boolean;
   onSend(action: TurnAction): Promise<void>;
   onContinue(): Promise<void>;
+  onRetryConnection(): Promise<void>;
   onLeave(): void;
 }) {
   const game = snapshot.state;
@@ -123,10 +127,14 @@ export function GameTable({
     setSelection(null);
   }
 
-  const missingPlayer = game.players.find(
+  const localDisconnected = snapshot.status !== 'connected';
+  const disconnectedSelf = localDisconnected
+    ? game.players.find(({ id }) => id === snapshot.self?.id)
+    : undefined;
+  const missingPlayer = disconnectedSelf ?? game.players.find(
     ({ id }) =>
       !game.bots.some((bot) => bot.id === id) &&
-      !snapshot.participants.some((participant) => participant.id === id),
+      !snapshot.connectedParticipantIds.includes(id),
   );
   const turnStatus =
     game.status === GameStatus.Finished
@@ -138,6 +146,7 @@ export function GameTable({
           : `${currentName}'s turn`;
   const showTurnActions =
     game.status === GameStatus.Active &&
+    !localDisconnected &&
     !missingPlayer &&
     isCurrentPlayer &&
     !game.pendingDraw;
@@ -162,10 +171,17 @@ export function GameTable({
       {missingPlayer ? (
         <View style={styles.alert}>
           <Text style={styles.alertText}>
-            {selectParticipantName(snapshot, missingPlayer.id) ?? 'A player'} left the game. This POC
-            cannot resume the match.
+            {missingPlayer.id === snapshot.self?.id
+              ? reconnecting
+                ? 'Reconnecting to the table…'
+                : 'Your connection to the table was lost.'
+              : `Waiting for ${selectParticipantName(snapshot, missingPlayer.id) ?? 'a player'} to reconnect.`}
           </Text>
         </View>
+      ) : null}
+
+      {localDisconnected && !reconnecting ? (
+        <RoomButton label="Retry connection" onPress={() => void onRetryConnection()} />
       ) : null}
 
       {game.status === GameStatus.Finished ? (

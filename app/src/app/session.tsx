@@ -29,8 +29,21 @@ const botPlaystyles = [
 ] as const;
 
 export default function SessionScreen() {
-  const { addBot, busy, continueGame, error, leave, removeBot, send, sending, snapshot, start } =
-    useSevensMultiplayer();
+  const {
+    addBot,
+    busy,
+    continueGame,
+    error,
+    leave,
+    reconnecting,
+    removeBot,
+    removeDisconnectedParticipant,
+    retryConnection,
+    send,
+    sending,
+    snapshot,
+    start,
+  } = useSevensMultiplayer();
   const [botPlaystyle, setBotPlaystyle] = useState(BotPlaystyle.Random);
 
   async function leaveSession() {
@@ -44,7 +57,7 @@ export default function SessionScreen() {
       isHost ? 'Close this table?' : 'Leave this table?',
       isHost
         ? 'The lobby or game will end for everyone.'
-        : 'You will not be able to reconnect to this game.',
+        : 'Leaving permanently gives up your reserved seat and recovery identity.',
       [
         { text: 'Stay', style: 'cancel' },
         {
@@ -85,6 +98,20 @@ export default function SessionScreen() {
     );
   }
 
+  if (snapshot.status === 'left') {
+    return (
+      <RoomScreen>
+        <BrandHeader eyebrow="TABLE CLOSED" title="The game has ended" />
+        <ErrorBanner message={snapshot.error ?? error} />
+        <RoomPanel style={styles.centered}>
+          <Text style={styles.waitTitle}>This table is no longer active.</Text>
+          <Text style={styles.waitBody}>Return home to create or find another local game.</Text>
+        </RoomPanel>
+        <RoomButton label="Back to home" onPress={() => void leaveSession()} />
+      </RoomScreen>
+    );
+  }
+
   if (snapshot.phase === 'started') {
     return (
       <RoomScreen>
@@ -93,7 +120,9 @@ export default function SessionScreen() {
           snapshot={snapshot}
           actionPending={sending}
           continuePending={busy || sending}
+          reconnecting={reconnecting}
           onContinue={continueGame}
+          onRetryConnection={retryConnection}
           onSend={send}
           onLeave={confirmLeave}
         />
@@ -104,7 +133,7 @@ export default function SessionScreen() {
   const lobby = snapshot.lobbyMetadata;
   const isHost = snapshot.role === 'host';
   const canStart = Boolean(lobby && lobby.playerCount >= lobby.minPlayers);
-  const disconnected = snapshot.status === 'disconnected' || snapshot.status === 'left';
+  const disconnected = snapshot.status === 'disconnected' || snapshot.status === 'reconnecting';
   const lobbyFull = Boolean(lobby && lobby.playerCount >= lobby.maxPlayers);
   const latestPoints = new Map(
     lobby?.latestScores.map(({ playerId, points }) => [playerId, points]) ?? [],
@@ -146,14 +175,14 @@ export default function SessionScreen() {
           <View style={styles.headerCopy}>
             <Text style={styles.lobbyTitle}>
               {disconnected
-                ? 'The table closed.'
+                  ? reconnecting ? 'Recovering the table.' : 'Connection lost.'
                 : isHost
                   ? 'You run this table.'
                   : 'Waiting for the host.'}
             </Text>
             <Text style={styles.waitBody}>
               {disconnected
-                ? 'Return home to create or find another game.'
+                  ? 'Your seat and scores are reserved while recovery runs.'
                 : isHost
                   ? 'Add bots or wait for players, then start with at least three seats filled.'
                   : 'The cards will be dealt when the host starts.'}
@@ -188,8 +217,10 @@ export default function SessionScreen() {
         <View style={styles.participantList}>
           {snapshot.participants.map((participant) => {
             const isSelf = participant.id === snapshot.self?.id;
-            const isParticipantHost = participant.slot === 0;
+            const isParticipantHost = participant.id === snapshot.hostParticipantId;
             const isPlayer = participant.metadata.role === 'player';
+            const isConnected = snapshot.connectedParticipantIds.includes(participant.id);
+            const canRemove = showBotActions && !isConnected && !isSelf;
             return (
               <View key={participant.id} style={styles.participant}>
                 <View
@@ -207,10 +238,22 @@ export default function SessionScreen() {
                   <View style={styles.badges}>
                     {isParticipantHost ? <Text style={styles.badge}>HOST</Text> : null}
                     {isSelf ? <Text style={styles.badge}>YOU</Text> : null}
+                    {!isConnected ? <Text style={styles.offlineBadge}>OFFLINE</Text> : null}
                   </View>
                 </View>
                 {scoreCells(participant.id, isPlayer)}
-                {showBotActions && showScores ? <View style={styles.rowActionSpace} /> : null}
+                {canRemove ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={busy}
+                    onPress={() => void removeDisconnectedParticipant(participant.id)}
+                    style={styles.removeBot}
+                  >
+                    <Text style={styles.removeBotText}>REMOVE</Text>
+                  </Pressable>
+                ) : showBotActions && showScores ? (
+                  <View style={styles.rowActionSpace} />
+                ) : null}
               </View>
             );
           })}
@@ -315,13 +358,20 @@ export default function SessionScreen() {
             <Text style={styles.hostWaitText}>Host controls the deal</Text>
           </View>
         ) : null}
+        {disconnected ? (
+          <RoomButton
+            label={reconnecting ? 'Recovering…' : 'Retry connection'}
+            disabled={reconnecting || busy}
+            onPress={() => void retryConnection()}
+          />
+        ) : null}
       </RoomPanel>
 
       <RoomButton
-        label={disconnected ? 'Back to home' : isHost ? 'Close lobby' : 'Leave lobby'}
-        variant={disconnected ? 'secondary' : 'danger'}
+        label={isHost ? 'Close lobby' : 'Leave lobby'}
+        variant="danger"
         disabled={busy}
-        onPress={disconnected ? () => void leaveSession() : confirmLeave}
+        onPress={confirmLeave}
       />
     </RoomScreen>
   );
@@ -371,6 +421,17 @@ const styles = StyleSheet.create({
   badge: {
     color: GameColors.gold,
     borderColor: GameColors.goldDark,
+    borderWidth: 1,
+    borderRadius: 99,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  offlineBadge: {
+    color: GameColors.danger,
+    borderColor: GameColors.danger,
     borderWidth: 1,
     borderRadius: 99,
     paddingHorizontal: 7,

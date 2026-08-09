@@ -20,9 +20,12 @@ function randomId() {
 const BRIDGE_HOST = `expo-lan-bridge-${process.pid}-${randomId()}.local`;
 
 function bridgedServiceName(name, device) {
-  const match = name.match(/^(.*)~[a-z0-9]{6}~[a-z0-9]{6}$/);
+  const match = name.match(/^(.*)~([a-z0-9]{12})~([a-z0-9]+)~([a-z0-9]+)~[a-z0-9]{6}$/);
   const visibleName = match?.[1] || name;
-  return `${visibleName} [bridge ${device}]~${randomId()}~${randomId()}`;
+  const authority = match
+    ? `~${match[2]}~${match[3]}~${match[4]}`
+    : `~${randomId()}${randomId()}~1~0`;
+  return `${visibleName} [bridge ${device}]${authority}~${randomId()}`;
 }
 
 function isBridgeService(service) {

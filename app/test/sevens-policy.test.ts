@@ -19,6 +19,7 @@ import {
 import {
   createSevensParticipantMetadata,
   createSevensPolicy,
+  type SevensPolicy,
 } from '../src/features/multiplayer/sevens-policy';
 import { SEVENS_BOT_TURN_EVENT } from '../src/features/multiplayer/types';
 import type {
@@ -43,6 +44,28 @@ const host = participant('host', 'Host', 'spectator', 0);
 const alice = participant('alice', 'Alice', 'player', 1);
 const bob = participant('bob', 'Bob', 'player', 2);
 const carol = participant('carol', 'Carol', 'player', 3);
+
+function connected(participants: readonly Participant<SevensParticipantMetadata>[]) {
+  return new Set(participants.map(({ id }) => id));
+}
+
+function lobbyMetadata(
+  policy: SevensPolicy,
+  participants: readonly Participant<SevensParticipantMetadata>[],
+) {
+  return policy.getLobbyMetadata(participants, connected(participants));
+}
+
+function reduceEvent(
+  policy: SevensPolicy,
+  game: SevensGameState,
+  event: Parameters<SevensPolicy['reduceEvent']>[1],
+  actor: Participant<SevensParticipantMetadata>,
+) {
+  return policy.reduceEvent(game, event, actor, {
+    authoritativeHost: actor.id === host.id,
+  });
+}
 
 test('initializes from finalized player roles and excludes a spectator host', () => {
   const policy = createSevensPolicy({
@@ -76,7 +99,7 @@ test('computes role-aware lobby metadata and enforces lobby policy', () => {
   });
   const participants = [alice, bob, carol, host];
 
-  assert.deepEqual(policy.getLobbyMetadata(participants), {
+  assert.deepEqual(lobbyMetadata(policy, participants), {
     appId: 'com.opengamesonline.sevens',
     gameVersion: 3,
     playerCount: 3,
@@ -111,8 +134,15 @@ test('computes role-aware lobby metadata and enforces lobby policy', () => {
     policy.validateJoin?.(participant('watcher', 'Watcher', 'spectator', 4), participants),
     null,
   );
-  assert.match(policy.validateStart?.([alice, bob]) ?? '', /At least 3/);
-  assert.equal(policy.validateStart?.([alice, bob, carol]), null);
+  assert.match(policy.validateStart?.([alice, bob], connected([alice, bob])) ?? '', /At least 3/);
+  assert.equal(
+    policy.validateStart?.([alice, bob, carol], connected([alice, bob, carol])),
+    null,
+  );
+  assert.match(
+    policy.validateStart?.([alice, bob, carol], connected([alice, bob])) ?? '',
+    /reconnect/,
+  );
 });
 
 test('adds strategy-configured bots to lobby capacity and the initialized roster', () => {
@@ -126,7 +156,7 @@ test('adds strategy-configured bots to lobby capacity and the initialized roster
 
   const cautious = policy.addBot(BotPlaystyle.Cautious, [alice]);
   const random = policy.addBot(BotPlaystyle.Random, [alice]);
-  const lobby = policy.getLobbyMetadata([alice]);
+  const lobby = lobbyMetadata(policy, [alice]);
 
   assert.equal(lobby.playerCount, 3);
   assert.deepEqual(lobby.bots, [cautious, random]);
@@ -139,7 +169,7 @@ test('adds strategy-configured bots to lobby capacity and the initialized roster
     }),
     false,
   );
-  assert.equal(policy.validateStart?.([alice]), null);
+  assert.equal(policy.validateStart?.([alice], connected([alice])), null);
   assert.match(
     policy.validateJoin?.(participant('bob-2', 'Another player', 'player', 1), [alice]) ?? '',
     /roster is full/,
@@ -151,7 +181,7 @@ test('adds strategy-configured bots to lobby capacity and the initialized roster
   assert.equal(game.players.flatMap(({ hand }) => hand).length, 52);
 
   assert.equal(policy.removeBot(cautious.id), true);
-  assert.equal(policy.getLobbyMetadata([alice]).playerCount, 2);
+  assert.equal(lobbyMetadata(policy, [alice]).playerCount, 2);
   assert.equal(policy.removeBot(cautious.id), false);
 });
 
@@ -193,10 +223,17 @@ test('only accepts bot actions attributed to the host', () => {
     action: { type: TurnActionType.Play, card: openingCard },
   } as const;
 
-  assert.equal(policy.reduceEvent(game, event, alice), game);
-  const result = policy.reduceEvent(game, event, host);
+  assert.equal(reduceEvent(policy, game, event, alice), game);
+  const result = reduceEvent(policy, game, event, host);
   assert.deepEqual(result.board[Suit.Spades], { min: Rank.Seven, max: Rank.Seven });
   assert.deepEqual(result.bots, [bot]);
+  const migratedHostResult = policy.reduceEvent(game, event, alice, {
+    authoritativeHost: true,
+  });
+  assert.deepEqual(migratedHostResult.board[Suit.Spades], {
+    min: Rank.Seven,
+    max: Rank.Seven,
+  });
 });
 
 test('applies a serialized Joker bridge play through the host policy', () => {
@@ -251,7 +288,7 @@ test('applies a serialized Joker bridge play through the host policy', () => {
     }),
   ) as TurnAction;
 
-  const result = policy.reduceEvent(serializedGame, serializedAction, alice);
+  const result = reduceEvent(policy, serializedGame, serializedAction, alice);
 
   assert.deepEqual(result.board[Suit.Hearts], { min: Rank.Seven, max: Rank.Ten });
   assert.equal(result.players[0]!.hand.length, 0);
@@ -280,7 +317,8 @@ test('persists latest and cumulative scores across rounds', () => {
     ],
     currentPlayerId: alice.id,
   };
-  const firstResult = policy.reduceEvent(
+  const firstResult = reduceEvent(
+    policy,
     firstRound,
     { type: TurnActionType.Play, card: openingCard },
     alice,
@@ -293,7 +331,7 @@ test('persists latest and cumulative scores across rounds', () => {
     { playerId: carol.id, playerName: carol.name, points: 10 },
   ]);
   assert.deepEqual(firstResult.cumulativeScores, firstResult.latestScores);
-  assert.equal(policy.getLobbyMetadata(participants).roundsPlayed, 1);
+  assert.equal(lobbyMetadata(policy, participants).roundsPlayed, 1);
 
   const secondInitial = policy.createInitialState(participants);
   assert.equal(secondInitial.roundNumber, 2);
@@ -308,7 +346,8 @@ test('persists latest and cumulative scores across rounds', () => {
     ],
     currentPlayerId: bob.id,
   };
-  const secondResult = policy.reduceEvent(
+  const secondResult = reduceEvent(
+    policy,
     secondRound,
     { type: TurnActionType.Play, card: openingCard },
     bob,
@@ -324,19 +363,20 @@ test('persists latest and cumulative scores across rounds', () => {
     { playerId: bob.id, playerName: bob.name, points: 15 },
     { playerId: carol.id, playerName: carol.name, points: 25 },
   ]);
-  const lobby = policy.getLobbyMetadata(participants);
+  const lobby = lobbyMetadata(policy, participants);
   assert.equal(lobby.roundsPlayed, 2);
   assert.deepEqual(lobby.latestScores, secondResult.latestScores);
   assert.deepEqual(lobby.cumulativeScores, secondResult.cumulativeScores);
   assert.equal(isSevensLobbyMetadata(JSON.parse(JSON.stringify(lobby))), true);
 
-  const staleResult = policy.reduceEvent(
+  const staleResult = reduceEvent(
+    policy,
     secondResult,
     { type: TurnActionType.Play, card: openingCard },
     bob,
   );
   assert.equal(staleResult, secondResult);
-  assert.equal(policy.getLobbyMetadata(participants).roundsPlayed, 2);
+  assert.equal(lobbyMetadata(policy, participants).roundsPlayed, 2);
 });
 
 test('uses connection-bound actors for the two-step draw flow', () => {
@@ -357,7 +397,8 @@ test('uses connection-bound actors for the two-step draw flow', () => {
     (card) => !isJokerCard(card) && (card.suit !== 'spades' || card.rank !== 7),
   )!;
 
-  const illegalAttempt = policy.reduceEvent(
+  const illegalAttempt = reduceEvent(
+    policy,
     game,
     { type: TurnActionType.Play, card: illegalOpeningCard },
     requester,
@@ -368,7 +409,8 @@ test('uses connection-bound actors for the two-step draw flow', () => {
   assert.deepEqual(illegalAttempt.board, game.board);
   assert.deepEqual(illegalAttempt.players, game.players);
 
-  const pending = policy.reduceEvent(
+  const pending = reduceEvent(
+    policy,
     illegalAttempt,
     { type: TurnActionType.RequestDraw },
     requester,
@@ -380,7 +422,8 @@ test('uses connection-bound actors for the two-step draw flow', () => {
   assert.equal(pending.lastIllegalMovePlayerId, null);
 
   const donorCard = pending.players.find(({ id }) => id === donor.id)!.hand[0]!;
-  const completed = policy.reduceEvent(
+  const completed = reduceEvent(
+    policy,
     pending,
     { type: TurnActionType.GiveCard, card: donorCard },
     donor,
@@ -391,14 +434,16 @@ test('uses connection-bound actors for the two-step draw flow', () => {
     game.players.find(({ id }) => id === requester.id)!.hand.length + 1,
   );
 
-  const spectatorAttempt = policy.reduceEvent(
+  const spectatorAttempt = reduceEvent(
+    policy,
     completed,
     { type: TurnActionType.Play, card: completed.players[0]!.hand[0]! },
     host,
   );
   assert.equal(spectatorAttempt, completed);
 
-  const malformedAttempt = policy.reduceEvent(
+  const malformedAttempt = reduceEvent(
+    policy,
     completed,
     { type: TurnActionType.Play } as TurnAction,
     requester,
@@ -410,7 +455,8 @@ test('uses connection-bound actors for the two-step draw flow', () => {
     status: GameStatus.Finished,
     winnerId: completed.players[0]!.id,
   };
-  const stalePlay = policy.reduceEvent(
+  const stalePlay = reduceEvent(
+    policy,
     finished,
     { type: TurnActionType.Play, card: finished.players[0]!.hand[0]! },
     participants[0]!,
