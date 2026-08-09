@@ -37,6 +37,7 @@ export type {
   SevensMultiplayer,
   SevensParticipantMetadata,
   SevensParticipantRole,
+  SevensScore,
   SevensSession,
   SevensSessionSnapshot,
 } from './types';

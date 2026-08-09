@@ -60,6 +60,9 @@ test('initializes from finalized player roles and excludes a spectator host', ()
   );
   assert.equal(game.players.flatMap(({ hand }) => hand).length, 52);
   assert.equal(game.lastIllegalMovePlayerId, null);
+  assert.equal(game.roundNumber, 1);
+  assert.deepEqual(game.latestScores, []);
+  assert.deepEqual(game.cumulativeScores, []);
 });
 
 test('computes role-aware lobby metadata and enforces lobby policy', () => {
@@ -75,12 +78,15 @@ test('computes role-aware lobby metadata and enforces lobby policy', () => {
 
   assert.deepEqual(policy.getLobbyMetadata(participants), {
     appId: 'com.opengamesonline.sevens',
-    gameVersion: 2,
+    gameVersion: 3,
     playerCount: 3,
     spectatorCount: 1,
     minPlayers: 3,
     maxPlayers: 3,
     bots: [],
+    roundsPlayed: 0,
+    latestScores: [],
+    cumulativeScores: [],
     showPlayableCards: true,
     variant: SevensVariant.Joker,
   });
@@ -177,6 +183,9 @@ test('only accepts bot actions attributed to the host', () => {
     winnerId: null,
     lastIllegalMovePlayerId: null,
     bots: [bot],
+    roundNumber: 1,
+    latestScores: [],
+    cumulativeScores: [],
   };
   const event = {
     type: SEVENS_BOT_TURN_EVENT,
@@ -230,6 +239,9 @@ test('applies a serialized Joker bridge play through the host policy', () => {
     winnerId: null,
     lastIllegalMovePlayerId: null,
     bots: [],
+    roundNumber: 1,
+    latestScores: [],
+    cumulativeScores: [],
   };
   const serializedGame = JSON.parse(JSON.stringify(game)) as SevensGameState;
   const serializedAction = JSON.parse(
@@ -245,6 +257,86 @@ test('applies a serialized Joker bridge play through the host policy', () => {
   assert.equal(result.players[0]!.hand.length, 0);
   assert.equal(result.players[1]!.hand.some(isJokerCard), true);
   assert.equal(result.winnerId, alice.id);
+});
+
+test('persists latest and cumulative scores across rounds', () => {
+  const policy = createSevensPolicy({
+    gameName: 'Series Table',
+    participantName: alice.name,
+    role: 'player',
+    maxPlayers: 3,
+    showPlayableCards: false,
+  });
+  const participants = [alice, bob, carol];
+  const openingCard = { suit: Suit.Spades, rank: Rank.Seven } as const;
+  const firstInitial = policy.createInitialState(participants);
+  const firstRound: SevensGameState = {
+    ...firstInitial,
+    board: createEmptyBoard(),
+    players: [
+      { id: alice.id, hand: [openingCard] },
+      { id: bob.id, hand: [{ suit: Suit.Clubs, rank: Rank.Ace }] },
+      { id: carol.id, hand: [{ suit: Suit.Hearts, rank: Rank.Ten }] },
+    ],
+    currentPlayerId: alice.id,
+  };
+  const firstResult = policy.reduceEvent(
+    firstRound,
+    { type: TurnActionType.Play, card: openingCard },
+    alice,
+  );
+
+  assert.equal(firstResult.status, GameStatus.Finished);
+  assert.deepEqual(firstResult.latestScores, [
+    { playerId: alice.id, playerName: alice.name, points: 0 },
+    { playerId: bob.id, playerName: bob.name, points: 15 },
+    { playerId: carol.id, playerName: carol.name, points: 10 },
+  ]);
+  assert.deepEqual(firstResult.cumulativeScores, firstResult.latestScores);
+  assert.equal(policy.getLobbyMetadata(participants).roundsPlayed, 1);
+
+  const secondInitial = policy.createInitialState(participants);
+  assert.equal(secondInitial.roundNumber, 2);
+  assert.deepEqual(secondInitial.latestScores, firstResult.latestScores);
+  const secondRound: SevensGameState = {
+    ...secondInitial,
+    board: createEmptyBoard(),
+    players: [
+      { id: alice.id, hand: [{ suit: Suit.Clubs, rank: Rank.Two }] },
+      { id: bob.id, hand: [openingCard] },
+      { id: carol.id, hand: [{ suit: Suit.Diamonds, rank: Rank.Ace }] },
+    ],
+    currentPlayerId: bob.id,
+  };
+  const secondResult = policy.reduceEvent(
+    secondRound,
+    { type: TurnActionType.Play, card: openingCard },
+    bob,
+  );
+
+  assert.deepEqual(secondResult.latestScores, [
+    { playerId: alice.id, playerName: alice.name, points: 5 },
+    { playerId: bob.id, playerName: bob.name, points: 0 },
+    { playerId: carol.id, playerName: carol.name, points: 15 },
+  ]);
+  assert.deepEqual(secondResult.cumulativeScores, [
+    { playerId: alice.id, playerName: alice.name, points: 5 },
+    { playerId: bob.id, playerName: bob.name, points: 15 },
+    { playerId: carol.id, playerName: carol.name, points: 25 },
+  ]);
+  const lobby = policy.getLobbyMetadata(participants);
+  assert.equal(lobby.roundsPlayed, 2);
+  assert.deepEqual(lobby.latestScores, secondResult.latestScores);
+  assert.deepEqual(lobby.cumulativeScores, secondResult.cumulativeScores);
+  assert.equal(isSevensLobbyMetadata(JSON.parse(JSON.stringify(lobby))), true);
+
+  const staleResult = policy.reduceEvent(
+    secondResult,
+    { type: TurnActionType.Play, card: openingCard },
+    bob,
+  );
+  assert.equal(staleResult, secondResult);
+  assert.equal(policy.getLobbyMetadata(participants).roundsPlayed, 2);
 });
 
 test('uses connection-bound actors for the two-step draw flow', () => {

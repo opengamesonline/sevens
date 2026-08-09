@@ -20,6 +20,7 @@ import {
   type SevensBotTurnEvent,
   type SevensParticipantMetadata,
   type SevensParticipantRole,
+  type SevensScore,
 } from './types';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -43,6 +44,12 @@ export function isSevensParticipantMetadata(
 
 export function isSevensLobbyMetadata(value: unknown): value is SevensLobbyMetadata {
   const bots = isRecord(value) && Array.isArray(value.bots) ? value.bots : null;
+  const latestScores = isRecord(value) && Array.isArray(value.latestScores)
+    ? value.latestScores
+    : null;
+  const cumulativeScores = isRecord(value) && Array.isArray(value.cumulativeScores)
+    ? value.cumulativeScores
+    : null;
   return (
     isRecord(value) &&
     value.appId === SEVENS_APP_ID &&
@@ -60,8 +67,36 @@ export function isSevensLobbyMetadata(value: unknown): value is SevensLobbyMetad
     bots.every(isSevensBot) &&
     new Set(bots.map((bot) => bot.id)).size === bots.length &&
     bots.length <= (value.playerCount as number) &&
+    Number.isInteger(value.roundsPlayed) &&
+    (value.roundsPlayed as number) >= 0 &&
+    latestScores !== null &&
+    latestScores.every(isSevensScore) &&
+    new Set(latestScores.map((score) => score.playerId)).size === latestScores.length &&
+    cumulativeScores !== null &&
+    cumulativeScores.every(isSevensScore) &&
+    new Set(cumulativeScores.map((score) => score.playerId)).size === cumulativeScores.length &&
+    latestScores.every((score) =>
+      cumulativeScores.some((total) => total.playerId === score.playerId)) &&
+    (((value.roundsPlayed as number) === 0 &&
+      latestScores.length === 0 &&
+      cumulativeScores.length === 0) ||
+      ((value.roundsPlayed as number) > 0 &&
+        latestScores.length >= MIN_SEVENS_PLAYERS &&
+        cumulativeScores.length >= latestScores.length)) &&
     typeof value.showPlayableCards === 'boolean' &&
     Object.values(SevensVariant).includes(value.variant as SevensVariant)
+  );
+}
+
+function isSevensScore(value: unknown): value is SevensScore {
+  return (
+    isRecord(value) &&
+    typeof value.playerId === 'string' &&
+    value.playerId.length > 0 &&
+    typeof value.playerName === 'string' &&
+    value.playerName.length > 0 &&
+    Number.isInteger(value.points) &&
+    (value.points as number) >= 0
   );
 }
 

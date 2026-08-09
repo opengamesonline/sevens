@@ -4,7 +4,6 @@ import {
   Suit,
   TurnActionType,
   cardEquals,
-  createFinalScores,
   isJokerCard,
   type Card,
   type TurnAction,
@@ -40,12 +39,16 @@ const handSuitOrder: Record<Suit, number> = {
 export function GameTable({
   snapshot,
   actionPending,
+  continuePending,
   onSend,
+  onContinue,
   onLeave,
 }: {
   snapshot: SevensSessionSnapshot;
   actionPending: boolean;
+  continuePending: boolean;
   onSend(action: TurnAction): Promise<void>;
+  onContinue(): Promise<void>;
   onLeave(): void;
 }) {
   const game = snapshot.state;
@@ -81,10 +84,16 @@ export function GameTable({
   const illegalMessage = game.lastIllegalMovePlayerId
     ? illegalMoveMessage(illegalPlayerName ?? 'A player')
     : null;
-  const finalScores =
-    game.status === GameStatus.Finished
-      ? sortFinalScores(createFinalScores(game), game.winnerId)
-      : [];
+  const finalScores = game.status === GameStatus.Finished
+    ? sortFinalScores(
+        game.latestScores.map(({ playerId, points }) => ({ playerId, score: points })),
+        game.winnerId,
+      )
+    : [];
+  const latestNames = new Map(game.latestScores.map(({ playerId, playerName }) => [playerId, playerName]));
+  const cumulativePoints = new Map(
+    game.cumulativeScores.map(({ playerId, points }) => [playerId, points]),
+  );
   const sortedHand = hand
     ? [...hand].sort(
         (left, right) => {
@@ -132,6 +141,9 @@ export function GameTable({
     !missingPlayer &&
     isCurrentPlayer &&
     !game.pendingDraw;
+  const leaveLabel = game.status === GameStatus.Finished
+    ? snapshot.role === 'host' ? 'Close table' : 'Leave table'
+    : snapshot.role === 'host' ? 'End game' : 'Leave game';
 
   return (
     <View style={styles.page}>
@@ -159,7 +171,7 @@ export function GameTable({
       {game.status === GameStatus.Finished ? (
         <RoomPanel style={styles.resultsPanel}>
           <View style={styles.resultsHeading}>
-            <Text style={styles.resultsTitle}>Results</Text>
+            <Text style={styles.resultsTitle}>Round {game.roundNumber} results</Text>
             <Text style={styles.resultsWinner}>{winnerName ?? 'A player'} wins</Text>
           </View>
           <View style={styles.resultsList}>
@@ -168,13 +180,16 @@ export function GameTable({
                 <Text style={styles.resultPlace}>{index + 1}</Text>
                 <View style={styles.resultPlayer}>
                   <Text style={styles.resultName}>
-                    {selectParticipantName(snapshot, playerId) ?? playerId}
+                    {latestNames.get(playerId) ?? selectParticipantName(snapshot, playerId) ?? playerId}
                   </Text>
                   {playerId === game.winnerId ? (
                     <Text style={styles.winnerLabel}>WINNER</Text>
                   ) : null}
                 </View>
-                <Text style={styles.resultScore}>{score} pts</Text>
+                <View style={styles.resultPoints}>
+                  <Text style={styles.resultScore}>{score} pts</Text>
+                  <Text style={styles.resultTotal}>{cumulativePoints.get(playerId) ?? score} total</Text>
+                </View>
               </View>
             ))}
           </View>
@@ -334,6 +349,21 @@ export function GameTable({
         />
       ) : null}
 
+      {game.status === GameStatus.Finished && snapshot.role === 'host' ? (
+        <RoomButton
+          label={continuePending ? 'Returning to lobby…' : 'Continue to lobby'}
+          variant="primary"
+          disabled={continuePending}
+          onPress={() => void onContinue()}
+        />
+      ) : null}
+
+      {game.status === GameStatus.Finished && snapshot.role !== 'host' ? (
+        <View style={styles.continueNotice}>
+          <Text style={styles.continueNoticeText}>Waiting for the host to continue.</Text>
+        </View>
+      ) : null}
+
       {showTurnActions ? (
         <View style={styles.actions}>
           <View style={styles.actionButton}>
@@ -358,7 +388,7 @@ export function GameTable({
           </View>
           <View style={styles.actionButton}>
             <RoomButton
-              label={snapshot.role === 'host' ? 'End game' : 'Leave game'}
+              label={leaveLabel}
               variant="danger"
               compact
               onPress={onLeave}
@@ -369,7 +399,7 @@ export function GameTable({
 
       {!showTurnActions ? (
         <RoomButton
-          label={snapshot.role === 'host' ? 'End game' : 'Leave game'}
+          label={leaveLabel}
           variant="danger"
           onPress={onLeave}
         />
@@ -447,7 +477,16 @@ const styles = StyleSheet.create({
   resultName: { color: GameColors.cream, fontSize: 16, fontWeight: '700' },
   winnerLabel: { color: GameColors.gold, fontSize: 9, fontWeight: '900', letterSpacing: 1.2 },
   resultScore: { color: GameColors.white, fontSize: 17, fontWeight: '800' },
+  resultPoints: { alignItems: 'flex-end' },
+  resultTotal: { color: GameColors.whiteMuted, fontSize: 10, marginTop: 2 },
   scoringNote: { color: GameColors.whiteMuted, fontSize: 12, textAlign: 'right' },
+  continueNotice: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: GameColors.border,
+    padding: 12,
+  },
+  continueNoticeText: { color: GameColors.creamMuted, textAlign: 'center' },
   panelLabel: { color: GameColors.gold, fontSize: 10, fontWeight: '800', letterSpacing: 1.8 },
   turnLabel: { color: GameColors.cream, fontSize: 17, letterSpacing: 0 },
   suitRows: { gap: 8 },

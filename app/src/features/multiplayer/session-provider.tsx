@@ -54,6 +54,7 @@ export type SevensMultiplayerContextValue = {
   refresh(): Promise<void>;
   join(options: JoinSevensGameOptions): Promise<boolean>;
   start(): Promise<void>;
+  continueGame(): Promise<void>;
   addBot(playstyle: BotPlaystyle): Promise<void>;
   removeBot(botId: string): Promise<void>;
   send(action: TurnAction): Promise<void>;
@@ -376,6 +377,28 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
     }
   }
 
+  async function continueGame() {
+    const session = sessionRef.current;
+    const game = session?.snapshot.state;
+    if (
+      !session ||
+      session.snapshot.role !== 'host' ||
+      session.snapshot.phase !== 'started' ||
+      game?.status !== GameStatus.Finished
+    ) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await session.returnToLobby();
+      botTurnInFlightRef.current = false;
+      handledBotRevisionRef.current = null;
+    } catch (cause) {
+      if (mountedRef.current) setError(errorMessage(cause));
+    } finally {
+      if (mountedRef.current) setBusy(false);
+    }
+  }
+
   async function addBot(playstyle: BotPlaystyle) {
     const session = sessionRef.current;
     const policy = policyRef.current;
@@ -487,6 +510,7 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
         refresh,
         join,
         start,
+        continueGame,
         addBot,
         removeBot,
         send,

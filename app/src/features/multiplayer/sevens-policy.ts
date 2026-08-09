@@ -2,6 +2,7 @@ import type { CreateGameOptions, Participant } from '@opengamesonline/expo-lan-m
 import {
   BotPlaystyle,
   GameStatus,
+  createFinalScores,
   initializeSevens,
   SevensVariant,
   TurnActionType,
@@ -20,6 +21,7 @@ import {
   type SevensLobbyMetadata,
   type SevensParticipantMetadata,
   type SevensParticipantRole,
+  type SevensScore,
 } from './types';
 import {
   isSevensBotTurnEvent,
@@ -99,6 +101,10 @@ export function createSevensPolicy({
 
   let bots: SevensBot[] = [];
   let nextBotNumber = 1;
+  let roundsPlayed = 0;
+  let latestScores: SevensScore[] = [];
+  let cumulativeScores: SevensScore[] = [];
+  let roundPlayerNames = new Map<string, string>();
 
   return {
     name: gameName,
@@ -134,11 +140,19 @@ export function createSevensPolicy({
       return true;
     },
     createInitialState(participants) {
-      const playerIds = [...players(participants).map(({ id }) => id), ...bots.map(({ id }) => id)];
+      const humanPlayers = players(participants);
+      const playerIds = [...humanPlayers.map(({ id }) => id), ...bots.map(({ id }) => id)];
+      roundPlayerNames = new Map([
+        ...humanPlayers.map(({ id, name }) => [id, name] as const),
+        ...bots.map(({ id, name }) => [id, name] as const),
+      ]);
       return {
         ...initializeSevens(playerIds, variant),
         lastIllegalMovePlayerId: null,
         bots: bots.map((bot) => ({ ...bot })),
+        roundNumber: roundsPlayed + 1,
+        latestScores: latestScores.map((score) => ({ ...score })),
+        cumulativeScores: cumulativeScores.map((score) => ({ ...score })),
       };
     },
     getLobbyMetadata(participants) {
@@ -150,6 +164,9 @@ export function createSevensPolicy({
         minPlayers: MIN_SEVENS_PLAYERS,
         maxPlayers,
         bots: bots.map((bot) => ({ ...bot })),
+        roundsPlayed,
+        latestScores: latestScores.map((score) => ({ ...score })),
+        cumulativeScores: cumulativeScores.map((score) => ({ ...score })),
         showPlayableCards,
         variant,
       };
@@ -206,7 +223,35 @@ export function createSevensPolicy({
 
       const nextGame = validateTurn(game, actorId, action);
       if (nextGame) {
-        return { ...nextGame, bots: game.bots, lastIllegalMovePlayerId: null };
+        if (game.status === GameStatus.Active && nextGame.status === GameStatus.Finished) {
+          latestScores = createFinalScores(nextGame).map(({ playerId, score }) => ({
+            playerId,
+            playerName: roundPlayerNames.get(playerId) ?? playerId,
+            points: score,
+          }));
+          const totals = new Map(
+            cumulativeScores.map((score) => [score.playerId, { ...score }] as const),
+          );
+          latestScores.forEach((score) => {
+            const previous = totals.get(score.playerId);
+            totals.set(score.playerId, {
+              playerId: score.playerId,
+              playerName: score.playerName,
+              points: (previous?.points ?? 0) + score.points,
+            });
+          });
+          cumulativeScores = [...totals.values()];
+          roundsPlayed += 1;
+        }
+
+        return {
+          ...nextGame,
+          bots: game.bots,
+          roundNumber: game.roundNumber,
+          latestScores: latestScores.map((score) => ({ ...score })),
+          cumulativeScores: cumulativeScores.map((score) => ({ ...score })),
+          lastIllegalMovePlayerId: null,
+        };
       }
 
       return game.status === GameStatus.Active && action.type === TurnActionType.Play

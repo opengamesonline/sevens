@@ -45,6 +45,9 @@ const game = {
   }),
   lastIllegalMovePlayerId: null,
   bots: [],
+  roundNumber: 1,
+  latestScores: [],
+  cumulativeScores: [],
 };
 
 function snapshot(selfIndex: number): SevensSessionSnapshot {
@@ -58,12 +61,15 @@ function snapshot(selfIndex: number): SevensSessionSnapshot {
     participants,
     lobbyMetadata: {
       appId: 'com.opengamesonline.sevens',
-      gameVersion: 2,
+      gameVersion: 3,
       playerCount: 3,
       spectatorCount: 1,
       minPlayers: 3,
       maxPlayers: 4,
       bots: [],
+      roundsPlayed: 0,
+      latestScores: [],
+      cumulativeScores: [],
       showPlayableCards: false,
       variant: SevensVariant.Standard,
     },

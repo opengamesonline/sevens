@@ -29,7 +29,7 @@ const botPlaystyles = [
 ] as const;
 
 export default function SessionScreen() {
-  const { addBot, busy, error, leave, removeBot, send, sending, snapshot, start } =
+  const { addBot, busy, continueGame, error, leave, removeBot, send, sending, snapshot, start } =
     useSevensMultiplayer();
   const [botPlaystyle, setBotPlaystyle] = useState(BotPlaystyle.Random);
 
@@ -92,6 +92,8 @@ export default function SessionScreen() {
         <GameTable
           snapshot={snapshot}
           actionPending={sending}
+          continuePending={busy || sending}
+          onContinue={continueGame}
           onSend={send}
           onLeave={confirmLeave}
         />
@@ -104,6 +106,35 @@ export default function SessionScreen() {
   const canStart = Boolean(lobby && lobby.playerCount >= lobby.minPlayers);
   const disconnected = snapshot.status === 'disconnected' || snapshot.status === 'left';
   const lobbyFull = Boolean(lobby && lobby.playerCount >= lobby.maxPlayers);
+  const latestPoints = new Map(
+    lobby?.latestScores.map(({ playerId, points }) => [playerId, points]) ?? [],
+  );
+  const cumulativePoints = new Map(
+    lobby?.cumulativeScores.map(({ playerId, points }) => [playerId, points]) ?? [],
+  );
+  const currentPlayerIds = new Set([
+    ...snapshot.participants.map(({ id }) => id),
+    ...(lobby?.bots.map(({ id }) => id) ?? []),
+  ]);
+  const historicalScores = [...(lobby?.cumulativeScores ?? [])].filter(
+    ({ playerId }) => !currentPlayerIds.has(playerId),
+  );
+  const showScores = Boolean(lobby && lobby.roundsPlayed > 0);
+  const showBotActions = !disconnected && isHost;
+
+  function scoreCells(playerId: string, eligible: boolean) {
+    if (!showScores) return null;
+    return (
+      <View style={styles.scoreColumns}>
+        <Text style={styles.standingPoints}>
+          {eligible ? latestPoints.get(playerId) ?? '—' : '—'}
+        </Text>
+        <Text style={styles.standingPoints}>
+          {eligible ? cumulativePoints.get(playerId) ?? 0 : '—'}
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <RoomScreen>
@@ -138,10 +169,27 @@ export default function SessionScreen() {
           ) : null}
         </View>
 
+        {showScores && lobby ? (
+          <View style={styles.rosterHeader}>
+            <View style={styles.rosterHeaderCopy}>
+              <Text style={styles.rosterLabel}>PLAYERS & STANDINGS</Text>
+              <Text style={styles.rosterHint}>
+                {lobby.roundsPlayed} round{lobby.roundsPlayed === 1 ? '' : 's'} · low score wins
+              </Text>
+            </View>
+            <View style={styles.scoreColumns}>
+              <Text style={styles.scoreColumnLabel}>LAST</Text>
+              <Text style={styles.scoreColumnLabel}>TOTAL</Text>
+            </View>
+            {showBotActions ? <View style={styles.rowActionSpace} /> : null}
+          </View>
+        ) : null}
+
         <View style={styles.participantList}>
           {snapshot.participants.map((participant) => {
             const isSelf = participant.id === snapshot.self?.id;
             const isParticipantHost = participant.slot === 0;
+            const isPlayer = participant.metadata.role === 'player';
             return (
               <View key={participant.id} style={styles.participant}>
                 <View
@@ -151,14 +199,18 @@ export default function SessionScreen() {
                   ]}
                 >
                   <Text style={styles.roleMarkText}>
-                    {participant.metadata.role === 'player' ? 'P' : 'S'}
+                    {isPlayer ? 'P' : 'S'}
                   </Text>
                 </View>
-                <Text style={styles.participantName}>{participant.name}</Text>
-                <View style={styles.badges}>
-                  {isParticipantHost ? <Text style={styles.badge}>HOST</Text> : null}
-                  {isSelf ? <Text style={styles.badge}>YOU</Text> : null}
+                <View style={styles.participantCopy}>
+                  <Text style={styles.participantName}>{participant.name}</Text>
+                  <View style={styles.badges}>
+                    {isParticipantHost ? <Text style={styles.badge}>HOST</Text> : null}
+                    {isSelf ? <Text style={styles.badge}>YOU</Text> : null}
+                  </View>
                 </View>
+                {scoreCells(participant.id, isPlayer)}
+                {showBotActions && showScores ? <View style={styles.rowActionSpace} /> : null}
               </View>
             );
           })}
@@ -167,11 +219,12 @@ export default function SessionScreen() {
               <View style={[styles.roleMark, styles.botMark]}>
                 <Text style={styles.roleMarkText}>B</Text>
               </View>
-              <View style={styles.botCopy}>
+              <View style={styles.participantCopy}>
                 <Text style={styles.participantName}>{bot.name}</Text>
                 <Text style={styles.botPlaystyle}>{bot.playstyle.toUpperCase()} BOT</Text>
               </View>
-              {!disconnected && isHost ? (
+              {scoreCells(bot.id, true)}
+              {showBotActions ? (
                 <Pressable
                   accessibilityRole="button"
                   disabled={busy}
@@ -181,6 +234,19 @@ export default function SessionScreen() {
                   <Text style={styles.removeBotText}>REMOVE</Text>
                 </Pressable>
               ) : null}
+            </View>
+          ))}
+          {historicalScores.map((score) => (
+            <View key={score.playerId} style={[styles.participant, styles.historicalParticipant]}>
+              <View style={[styles.roleMark, styles.historicalMark]}>
+                <Text style={styles.roleMarkText}>P</Text>
+              </View>
+              <View style={styles.participantCopy}>
+                <Text style={styles.participantName}>{score.playerName}</Text>
+                <Text style={styles.historicalLabel}>LEFT TABLE</Text>
+              </View>
+              {scoreCells(score.playerId, true)}
+              {showBotActions && showScores ? <View style={styles.rowActionSpace} /> : null}
             </View>
           ))}
         </View>
@@ -237,7 +303,7 @@ export default function SessionScreen() {
 
         {!disconnected && isHost ? (
           <RoomButton
-            label={busy ? 'Starting…' : 'Start game'}
+            label={busy ? 'Starting…' : lobby && lobby.roundsPlayed > 0 ? 'Start next round' : 'Start game'}
             variant="primary"
             disabled={busy || !canStart}
             onPress={() => void start()}
@@ -292,12 +358,16 @@ const styles = StyleSheet.create({
   spectatorMark: { backgroundColor: GameColors.feltLight, borderWidth: 1, borderColor: GameColors.border },
   botMark: { backgroundColor: GameColors.creamMuted },
   roleMarkText: { color: GameColors.feltDeep, fontWeight: '900' },
-  participantName: { flex: 1, color: GameColors.white, fontSize: 15, fontWeight: '600' },
-  botCopy: { flex: 1 },
+  participantCopy: { flex: 1, minWidth: 0 },
+  participantName: { color: GameColors.white, fontSize: 15, fontWeight: '600' },
   botPlaystyle: { color: GameColors.whiteMuted, fontSize: 9, fontWeight: '800', marginTop: 2 },
-  removeBot: { paddingHorizontal: 4, paddingVertical: 8 },
+  historicalParticipant: { opacity: 0.66 },
+  historicalMark: { backgroundColor: GameColors.whiteMuted },
+  historicalLabel: { color: GameColors.whiteMuted, fontSize: 8, fontWeight: '800', marginTop: 2 },
+  removeBot: { width: 55, paddingVertical: 8, alignItems: 'flex-end' },
   removeBotText: { color: GameColors.danger, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
-  badges: { flexDirection: 'row', gap: 5 },
+  rowActionSpace: { width: 55 },
+  badges: { flexDirection: 'row', gap: 5, marginTop: 3 },
   badge: {
     color: GameColors.gold,
     borderColor: GameColors.goldDark,
@@ -310,6 +380,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   lobbySummary: { color: GameColors.creamMuted, textAlign: 'center', fontSize: 13 },
+  rosterHeader: { flexDirection: 'row', alignItems: 'flex-end', paddingHorizontal: 10 },
+  rosterHeaderCopy: { flex: 1 },
+  rosterLabel: { color: GameColors.gold, fontSize: 11, fontWeight: '900', letterSpacing: 1.4 },
+  rosterHint: { color: GameColors.whiteMuted, fontSize: 10, marginTop: 3 },
+  scoreColumns: { width: 92, flexDirection: 'row', justifyContent: 'space-between' },
+  scoreColumnLabel: { width: 42, color: GameColors.whiteMuted, fontSize: 8, fontWeight: '900', textAlign: 'right' },
+  standingPoints: { width: 42, color: GameColors.white, fontSize: 14, fontWeight: '800', textAlign: 'right' },
   botControls: {
     gap: 10,
     borderTopWidth: 1,
