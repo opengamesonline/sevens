@@ -75,6 +75,7 @@ function snapshot(selfIndex: number): SevensSessionSnapshot {
       latestScores: [],
       cumulativeScores: [],
       showPlayableCards: false,
+      preventIllegalDraw: false,
       variant: SevensVariant.Standard,
     },
     error: null,

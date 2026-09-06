@@ -87,6 +87,7 @@ export function isSevensLobbyMetadata(value: unknown): value is SevensLobbyMetad
         latestScores.length >= MIN_SEVENS_PLAYERS &&
         cumulativeScores.length >= latestScores.length)) &&
     typeof value.showPlayableCards === 'boolean' &&
+    typeof value.preventIllegalDraw === 'boolean' &&
     Object.values(SevensVariant).includes(value.variant as SevensVariant)
   );
 }

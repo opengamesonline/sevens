@@ -2,7 +2,7 @@
 
 - [x] End the match for everyone when a player explicitly leaves mid-game
 - [x] Add a confirmation popup before leaving/ending a game
-- [ ] Add an option to prevent user from illegally drawing card
+- [x] Add an option to prevent user from illegally drawing card
 - [x] Add a visual confirmation before drawing a card
 - [ ] Make bot moves slower / more visible to prevent confusion
 - [ ] Show the card that you received from the opponent (nice animation)

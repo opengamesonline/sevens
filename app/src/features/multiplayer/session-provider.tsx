@@ -283,6 +283,7 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
       role: self.metadata.role,
       maxPlayers: recovery.lobbyMetadata.maxPlayers,
       showPlayableCards: recovery.lobbyMetadata.showPlayableCards,
+      preventIllegalDraw: recovery.lobbyMetadata.preventIllegalDraw,
       variant: recovery.lobbyMetadata.variant,
       recovery: {
         lobbyMetadata: recovery.lobbyMetadata,
@@ -340,6 +341,7 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
           ?? 'player',
         maxPlayers: saved.recovery.lobbyMetadata.maxPlayers,
         showPlayableCards: saved.recovery.lobbyMetadata.showPlayableCards,
+        preventIllegalDraw: saved.recovery.lobbyMetadata.preventIllegalDraw,
         variant: saved.recovery.lobbyMetadata.variant,
         recovery: {
           lobbyMetadata: saved.recovery.lobbyMetadata,

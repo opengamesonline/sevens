@@ -74,6 +74,7 @@ test('initializes from finalized player roles and excludes a spectator host', ()
     role: 'spectator',
     maxPlayers: 4,
     showPlayableCards: false,
+    preventIllegalDraw: false,
   });
   const game = policy.createInitialState([host, alice, bob, carol]);
 
@@ -96,6 +97,7 @@ test('computes role-aware lobby metadata and enforces lobby policy', () => {
     role: 'player',
     maxPlayers: 3,
     showPlayableCards: true,
+    preventIllegalDraw: false,
     variant: SevensVariant.Joker,
   });
   const participants = [alice, bob, carol, host];
@@ -112,6 +114,7 @@ test('computes role-aware lobby metadata and enforces lobby policy', () => {
     latestScores: [],
     cumulativeScores: [],
     showPlayableCards: true,
+    preventIllegalDraw: false,
     variant: SevensVariant.Joker,
   });
   const jokerGame = policy.createInitialState(participants);
@@ -153,6 +156,7 @@ test('adds strategy-configured bots to lobby capacity and the initialized roster
     role: 'player',
     maxPlayers: 3,
     showPlayableCards: false,
+    preventIllegalDraw: false,
   });
 
   const cautious = policy.addBot(BotPlaystyle.Cautious, [alice]);
@@ -193,6 +197,7 @@ test('only accepts bot actions attributed to the host', () => {
     role: 'spectator',
     maxPlayers: 3,
     showPlayableCards: false,
+    preventIllegalDraw: false,
   });
   const bot = {
     id: 'sevens-bot-1',
@@ -245,6 +250,7 @@ test('applies a serialized Joker bridge play through the host policy', () => {
     role: 'player',
     maxPlayers: 3,
     showPlayableCards: false,
+    preventIllegalDraw: false,
     variant: SevensVariant.Joker,
   });
   const boardCards = [
@@ -311,6 +317,7 @@ test('persists latest and cumulative scores across rounds', () => {
     role: 'player',
     maxPlayers: 3,
     showPlayableCards: false,
+    preventIllegalDraw: false,
   });
   const participants = [alice, bob, carol];
   const openingCard = { suit: Suit.Spades, rank: Rank.Seven } as const;
@@ -393,6 +400,77 @@ test('persists latest and cumulative scores across rounds', () => {
   assert.equal(lobbyMetadata(policy, participants).roundsPlayed, 2);
 });
 
+test('rejects illegal draws when the table locks them', () => {
+  const locked = createSevensPolicy({
+    gameName: 'Locked Table',
+    participantName: alice.name,
+    role: 'player',
+    maxPlayers: 3,
+    showPlayableCards: false,
+    preventIllegalDraw: true,
+  });
+  const free = createSevensPolicy({
+    gameName: 'Free Table',
+    participantName: alice.name,
+    role: 'player',
+    maxPlayers: 3,
+    showPlayableCards: false,
+    preventIllegalDraw: false,
+  });
+  const participants = [alice, bob, carol];
+  const base = locked.createInitialState(participants);
+  free.createInitialState(participants);
+  const game: SevensGameState = {
+    ...base,
+    board: placeCard(createEmptyBoard(), { suit: Suit.Spades, rank: Rank.Seven }),
+    players: [
+      { id: alice.id, hand: [{ suit: Suit.Spades, rank: Rank.Eight }] },
+      { id: bob.id, hand: [{ suit: Suit.Hearts, rank: Rank.Eight }] },
+      { id: carol.id, hand: [{ suit: Suit.Diamonds, rank: Rank.Seven }] },
+    ],
+    currentPlayerId: bob.id,
+    pendingDraw: null,
+  };
+
+  const allowed = reduceEvent(
+    locked,
+    game,
+    { type: TurnActionType.RequestDraw },
+    bob,
+  );
+  assert.deepEqual(allowed.pendingDraw, { requesterId: bob.id, donorId: alice.id });
+  assert.equal(
+    allowed.moveLog[allowed.moveLog.length - 1]!.text,
+    'Bob draws from Alice.',
+  );
+
+  const blocked = reduceEvent(
+    locked,
+    { ...game, currentPlayerId: alice.id },
+    { type: TurnActionType.RequestDraw },
+    alice,
+  );
+  assert.equal(blocked.pendingDraw, null);
+  assert.equal(blocked.lastIllegalMovePlayerId, alice.id);
+  assert.equal(
+    blocked.moveLog[blocked.moveLog.length - 1]!.text,
+    'Alice tried to play an illegal move.',
+  );
+
+  const permitted = reduceEvent(
+    free,
+    { ...game, currentPlayerId: alice.id, moveLog: [] },
+    { type: TurnActionType.RequestDraw },
+    alice,
+  );
+  assert.deepEqual(permitted.pendingDraw, { requesterId: alice.id, donorId: carol.id });
+
+  assert.equal(
+    isSevensLobbyMetadata({ ...lobbyMetadata(locked, participants), preventIllegalDraw: 'yes' }),
+    false,
+  );
+});
+
 test('uses connection-bound actors for the two-step draw flow', () => {
   const policy = createSevensPolicy({
     gameName: 'Table',
@@ -400,6 +478,7 @@ test('uses connection-bound actors for the two-step draw flow', () => {
     role: 'player',
     maxPlayers: 3,
     showPlayableCards: false,
+    preventIllegalDraw: false,
   });
   const participants = [alice, bob, carol];
   const game = policy.createInitialState(participants);

@@ -53,6 +53,7 @@ export default function HomeScreen() {
   const [variant, setVariant] = useState(SevensVariant.Standard);
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [showPlayableCards, setShowPlayableCards] = useState(false);
+  const [preventIllegalDraw, setPreventIllegalDraw] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [usernameError, setUsernameError] = useState<string | null>(null);
 
@@ -92,6 +93,7 @@ export default function HomeScreen() {
       role,
       maxPlayers,
       showPlayableCards,
+      preventIllegalDraw,
       variant,
     });
     if (created) {
@@ -242,6 +244,21 @@ export default function HomeScreen() {
                 onValueChange={setShowPlayableCards}
                 trackColor={{ false: GameColors.feltLight, true: GameColors.goldDark }}
                 thumbColor={showPlayableCards ? GameColors.gold : GameColors.creamMuted}
+              />
+            </View>
+            <View style={styles.settingRow}>
+              <View style={styles.settingCopy}>
+                <Text style={styles.fieldLabel}>PREVENT ILLEGAL DRAWS</Text>
+                <Text style={styles.capacityHint}>
+                  Drawing is only allowed when no legal play exists.
+                </Text>
+              </View>
+              <Switch
+                accessibilityLabel="Prevent illegal draws"
+                value={preventIllegalDraw}
+                onValueChange={setPreventIllegalDraw}
+                trackColor={{ false: GameColors.feltLight, true: GameColors.goldDark }}
+                thumbColor={preventIllegalDraw ? GameColors.gold : GameColors.creamMuted}
               />
             </View>
             <ErrorBanner message={formError ?? error} />

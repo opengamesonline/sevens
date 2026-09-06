@@ -99,6 +99,7 @@ export function GameTable({
   const selfId = snapshot.self?.id ?? null;
   const isPlayer = snapshot.self?.metadata.role === 'player';
   const showPlayableCards = snapshot.lobbyMetadata?.showPlayableCards ?? false;
+  const preventIllegalDraw = snapshot.lobbyMetadata?.preventIllegalDraw ?? false;
   const isCurrentPlayer = isPlayer && game.currentPlayerId === selfId;
   const isDonor = isPlayer && game.pendingDraw?.donorId === selfId;
   const isRequester = isPlayer && game.pendingDraw?.requesterId === selfId;
@@ -390,7 +391,9 @@ export function GameTable({
             <RoomButton
               label="Draw"
               compact
-              disabled={!showTurnActions || actionPending}
+              disabled={
+                !showTurnActions || actionPending || (preventIllegalDraw && playableCards.length > 0)
+              }
               onPress={() => setDrawConfirmation({ revision: snapshot.revision })}
             />
           </View>

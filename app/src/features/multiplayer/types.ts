@@ -73,6 +73,7 @@ export type SevensLobbyMetadata = {
   latestScores: SevensScore[];
   cumulativeScores: SevensScore[];
   showPlayableCards: boolean;
+  preventIllegalDraw: boolean;
   variant: SevensVariant;
 };
 

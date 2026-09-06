@@ -383,6 +383,8 @@ export default function SessionScreen() {
             {lobby.variant === SevensVariant.Joker ? 'joker' : 'standard'}
             {' · '}
             hints {lobby.showPlayableCards ? 'on' : 'off'}
+            {' · '}
+            draws {lobby.preventIllegalDraw ? 'locked' : 'free'}
           </Text>
         ) : null}
 

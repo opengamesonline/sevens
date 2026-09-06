@@ -4,6 +4,7 @@ import {
   GameStatus,
   Suit,
   createFinalScores,
+  getPlayableCards,
   initializeSevens,
   SevensVariant,
   TurnActionType,
@@ -41,6 +42,7 @@ export type CreateSevensPolicyOptions = {
   role: SevensParticipantRole;
   maxPlayers: number;
   showPlayableCards: boolean;
+  preventIllegalDraw: boolean;
   variant?: SevensVariant;
   recovery?: {
     lobbyMetadata: SevensLobbyMetadata;
@@ -143,12 +145,14 @@ export function createSevensPolicy({
   role,
   maxPlayers,
   showPlayableCards,
+  preventIllegalDraw,
   variant = SevensVariant.Standard,
   recovery,
 }: CreateSevensPolicyOptions): SevensPolicy {
   const restoredLobby = recovery?.lobbyMetadata;
   const policyMaxPlayers = restoredLobby?.maxPlayers ?? maxPlayers;
   const policyShowPlayableCards = restoredLobby?.showPlayableCards ?? showPlayableCards;
+  const policyPreventIllegalDraw = restoredLobby?.preventIllegalDraw ?? preventIllegalDraw;
   const policyVariant = restoredLobby?.variant ?? variant;
   if (
     !Number.isInteger(policyMaxPlayers) ||
@@ -175,6 +179,19 @@ export function createSevensPolicy({
     ...(recovery?.participants.map(({ id, name }) => [id, name] as const) ?? []),
     ...bots.map(({ id, name }) => [id, name] as const),
   ]);
+
+  function flagIllegalMove(target: SevensGameState, offenderId: string): SevensGameState {
+    if (target.lastIllegalMovePlayerId === offenderId) {
+      return { ...target, lastIllegalMovePlayerId: offenderId };
+    }
+    return {
+      ...target,
+      lastIllegalMovePlayerId: offenderId,
+      moveLog: appendMoveLog(target, [
+        illegalMoveMessage(roundPlayerNames.get(offenderId) ?? offenderId),
+      ]),
+    };
+  }
 
   return {
     name: gameName,
@@ -240,6 +257,7 @@ export function createSevensPolicy({
         latestScores: latestScores.map((score) => ({ ...score })),
         cumulativeScores: cumulativeScores.map((score) => ({ ...score })),
         showPlayableCards: policyShowPlayableCards,
+        preventIllegalDraw: policyPreventIllegalDraw,
         variant: policyVariant,
       };
     },
@@ -300,7 +318,29 @@ export function createSevensPolicy({
       }
 
       const nextGame = validateTurn(game, actorId, action);
-      if (nextGame) {
+      if (!nextGame) {
+        if (game.status === GameStatus.Active && action.type === TurnActionType.Play) {
+          return flagIllegalMove(game, actorId);
+        }
+        return game;
+      }
+      if (
+        policyPreventIllegalDraw &&
+        action.type === TurnActionType.RequestDraw &&
+        game.pendingDraw === null &&
+        actorId === game.currentPlayerId
+      ) {
+        const actor = game.players.find(({ id }) => id === actorId);
+        const playable = actor
+          ? getPlayableCards(game.board, actor.hand, game.variant, {
+              playerId: actorId,
+              players: game.players,
+            })
+          : [];
+        if (playable.length > 0) {
+          return flagIllegalMove(game, actorId);
+        }
+      }
         const texts: string[] = [];
         const nameOf = (playerId: string) => roundPlayerNames.get(playerId) ?? playerId;
         if (!game.pendingDraw && nextGame.pendingDraw) {
@@ -354,19 +394,6 @@ export function createSevensPolicy({
           lastIllegalMovePlayerId: null,
           moveLog: appendMoveLog(game, texts),
         };
-      }
-
-      if (game.status === GameStatus.Active && action.type === TurnActionType.Play) {
-        if (game.lastIllegalMovePlayerId === actorId) return { ...game, lastIllegalMovePlayerId: actorId };
-        return {
-          ...game,
-          lastIllegalMovePlayerId: actorId,
-          moveLog: appendMoveLog(game, [
-            illegalMoveMessage(roundPlayerNames.get(actorId) ?? actorId),
-          ]),
-        };
-      }
-      return game;
     },
   };
 }
