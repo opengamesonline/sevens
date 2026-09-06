@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "sevens",
+    "slug": "sevens",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "sevens",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#0B6E4F",
+    "ios": {
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.opengamesonline.sevens",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Discover and connect to multiplayer games on your local network.",
+        "NSBonjourServices": [
+          "_expo-lan-game._tcp"
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0B6E4F",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.opengamesonline.sevens"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B6E4F",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 76
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
