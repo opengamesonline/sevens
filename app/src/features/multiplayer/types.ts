@@ -7,6 +7,7 @@ import type {
 } from '@opengamesonline/expo-lan-multiplayer';
 import type {
   BotPlaystyle,
+  Card,
   SevensGameObject,
   SevensVariant,
   TurnAction,
@@ -41,9 +42,14 @@ export type SevensScore = {
   points: number;
 };
 
+export type SevensMoveLogKind = 'round' | 'play' | 'bridge' | 'draw' | 'give' | 'illegal' | 'win';
+
 export type SevensMoveLogEntry = {
   key: string;
   text: string;
+  kind: SevensMoveLogKind;
+  actorId: string | null;
+  cards: readonly Card[];
 };
 
 export type SevensGameState = SevensGameObject & {

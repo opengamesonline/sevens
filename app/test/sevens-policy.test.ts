@@ -27,6 +27,7 @@ import type {
   SevensParticipantMetadata,
 } from '../src/features/multiplayer/types';
 import {
+  isSevensGameState,
   isSevensLobbyMetadata,
   isTurnAction,
 } from '../src/features/multiplayer/validation';
@@ -87,7 +88,9 @@ test('initializes from finalized player roles and excludes a spectator host', ()
   assert.equal(game.roundNumber, 1);
   assert.deepEqual(game.latestScores, []);
   assert.deepEqual(game.cumulativeScores, []);
-  assert.deepEqual(game.moveLog, [{ key: '1-0', text: 'Round 1 dealt.' }]);
+  assert.deepEqual(game.moveLog, [
+    { key: '1-0', text: 'Round 1 dealt.', kind: 'round', actorId: null, cards: [] },
+  ]);
 });
 
 test('computes role-aware lobby metadata and enforces lobby policy', () => {
@@ -305,8 +308,17 @@ test('applies a serialized Joker bridge play through the host policy', () => {
   assert.equal(result.players[1]!.hand.some(isJokerCard), true);
   assert.equal(result.winnerId, alice.id);
   assert.deepEqual(result.moveLog, [
-    { key: '1-0', text: 'Alice played 9♥, 10♥.' },
-    { key: '1-1', text: 'Alice wins round 1 · 0 pts' },
+    {
+      key: '1-0',
+      text: 'Alice used the Joker to play 9♥, 10♥.',
+      kind: 'bridge',
+      actorId: 'alice',
+      cards: [
+        { suit: Suit.Hearts, rank: Rank.Nine },
+        { suit: Suit.Hearts, rank: Rank.Ten },
+      ],
+    },
+    { key: '1-1', text: 'Alice wins round 1 · 0 pts', kind: 'win', actorId: 'alice', cards: [] },
   ]);
 });
 
@@ -340,10 +352,17 @@ test('persists latest and cumulative scores across rounds', () => {
   );
 
   assert.equal(firstResult.status, GameStatus.Finished);
+  assert.equal(isSevensGameState(JSON.parse(JSON.stringify(firstResult))), true);
   assert.deepEqual(firstResult.moveLog, [
-    { key: '1-0', text: 'Round 1 dealt.' },
-    { key: '1-1', text: 'Alice played 7♠.' },
-    { key: '1-2', text: 'Alice wins round 1 · 0 pts' },
+    { key: '1-0', text: 'Round 1 dealt.', kind: 'round', actorId: null, cards: [] },
+    {
+      key: '1-1',
+      text: 'Alice played 7♠.',
+      kind: 'play',
+      actorId: 'alice',
+      cards: [{ suit: Suit.Spades, rank: Rank.Seven }],
+    },
+    { key: '1-2', text: 'Alice wins round 1 · 0 pts', kind: 'win', actorId: 'alice', cards: [] },
   ]);
   assert.deepEqual(firstResult.latestScores, [
     { playerId: alice.id, playerName: alice.name, points: 0 },
@@ -355,7 +374,9 @@ test('persists latest and cumulative scores across rounds', () => {
 
   const secondInitial = policy.createInitialState(participants);
   assert.equal(secondInitial.roundNumber, 2);
-  assert.deepEqual(secondInitial.moveLog, [{ key: '2-0', text: 'Round 2 dealt.' }]);
+  assert.deepEqual(secondInitial.moveLog, [
+    { key: '2-0', text: 'Round 2 dealt.', kind: 'round', actorId: null, cards: [] },
+  ]);
   assert.deepEqual(secondInitial.latestScores, firstResult.latestScores);
   const secondRound: SevensGameState = {
     ...secondInitial,
@@ -502,8 +523,14 @@ test('uses connection-bound actors for the two-step draw flow', () => {
   assert.deepEqual(illegalAttempt.board, game.board);
   assert.deepEqual(illegalAttempt.players, game.players);
   assert.deepEqual(illegalAttempt.moveLog, [
-    { key: '1-0', text: 'Round 1 dealt.' },
-    { key: '1-1', text: `${requester.name} tried to play an illegal move.` },
+    { key: '1-0', text: 'Round 1 dealt.', kind: 'round', actorId: null, cards: [] },
+    {
+      key: '1-1',
+      text: `${requester.name} tried to play an illegal move.`,
+      kind: 'illegal',
+      actorId: requester.id,
+      cards: [],
+    },
   ]);
 
   const repeatIllegal = reduceEvent(

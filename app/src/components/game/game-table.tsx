@@ -12,6 +12,7 @@ import { useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { cardKey, PlayingCard, suitGlyph } from '@/components/cards/playing-card';
+import { cardLabel, gainedCards, placedCards } from '@/components/cards/card-text';
 import { RoomButton, RoomPanel } from '@/components/room/room-ui';
 import { GameCardSize, GameColors } from '@/constants/theme';
 import {
@@ -26,6 +27,7 @@ import {
   selectParticipantName,
   selectPlayableCards,
   selectSuitRuns,
+  type SevensGameState,
   type SevensSessionSnapshot,
 } from '@/features/multiplayer';
 
@@ -52,6 +54,26 @@ const boardRanks: readonly Rank[] = [
   Rank.King,
 ];
 
+type CardReceipt = {
+  key: string;
+  gained: Card[];
+  lost: Card[];
+  title: string;
+  text: string;
+};
+
+type ReceiptTracker = {
+  tableId: string | null;
+  revision: number;
+  roundNumber: number;
+  prevStatus: GameStatus;
+  prevHand: readonly Card[];
+  prevBoard: SevensGameState['board'];
+  awaitingDraw: { donorId: string | null } | null;
+  lastLogKey: string | null;
+  queue: CardReceipt[];
+};
+
 export function GameTable({
   snapshot,
   actionPending,
@@ -74,9 +96,11 @@ export function GameTable({
   const game = snapshot.state;
   const [selection, setSelection] = useState<{ card: Card; revision: number } | null>(null);
   const [handWidth, setHandWidth] = useState(0);
+  const [boardWidth, setBoardWidth] = useState(0);
   const [drawConfirmation, setDrawConfirmation] = useState<{ revision: number } | null>(null);
   const [leaveConfirming, setLeaveConfirming] = useState(false);
   const [logVisible, setLogVisible] = useState(false);
+  const [receipts, setReceipts] = useState<ReceiptTracker | null>(null);
   const logScrollRef = useRef<ScrollView>(null);
   const selectedCard = selection?.revision === snapshot.revision ? selection.card : null;
   const isDrawConfirming = drawConfirmation?.revision === snapshot.revision;
@@ -120,6 +144,121 @@ export function GameTable({
         null)
       : null;
   const drawDonorName = selectParticipantName(snapshot, drawDonorId);
+  const selfHand = hand ?? [];
+  const prevActive =
+    receipts !== null &&
+    receipts.tableId === snapshot.tableId &&
+    receipts.prevStatus === GameStatus.Active;
+  if (
+    (game.status === GameStatus.Active ||
+      (game.status === GameStatus.Finished && prevActive)) &&
+    (!receipts ||
+      receipts.tableId !== snapshot.tableId ||
+      receipts.revision !== snapshot.revision)
+  ) {
+    if (!receipts || receipts.tableId !== snapshot.tableId) {
+      setReceipts({
+        tableId: snapshot.tableId,
+        revision: snapshot.revision,
+        roundNumber: game.roundNumber,
+        prevStatus: game.status,
+        prevHand: selfHand,
+        prevBoard: game.board,
+        awaitingDraw: null,
+        lastLogKey:
+          game.moveLog.length > 0 ? game.moveLog[game.moveLog.length - 1]!.key : null,
+        queue: [],
+      });
+    } else {
+      const roundChanged = receipts.roundNumber !== game.roundNumber;
+      const gained = roundChanged ? [] : gainedCards(receipts.prevHand, selfHand);
+      const lost = roundChanged ? [] : gainedCards(selfHand, receipts.prevHand);
+      const forced = roundChanged ? [] : placedCards(receipts.prevBoard, game.board, lost);
+      const seenLogIndex = receipts.lastLogKey
+        ? game.moveLog.findIndex((entry) => entry.key === receipts.lastLogKey)
+        : -1;
+      const newLogEntries =
+        roundChanged || seenLogIndex < 0 ? [] : game.moveLog.slice(seenLogIndex + 1);
+      const nextLastLogKey =
+        game.moveLog.length > 0
+          ? game.moveLog[game.moveLog.length - 1]!.key
+          : receipts.lastLogKey;
+      const newReceipts: CardReceipt[] = [];
+      let awaitingDraw = roundChanged ? null : receipts.awaitingDraw;
+      if (!roundChanged && gained.length > 0 && selfId !== null) {
+        if (awaitingDraw && forced.length === 0) {
+          const donorName = awaitingDraw.donorId
+            ? (selectParticipantName(snapshot, awaitingDraw.donorId) ?? 'your opponent')
+            : 'your opponent';
+          newReceipts.push({
+            key: `${snapshot.revision}-receipt-${receipts.queue.length}`,
+            gained,
+            lost: [],
+            title: 'CARD RECEIVED',
+            text: `You received ${gained.map(cardLabel).join(', ')} from ${donorName}.`,
+          });
+          awaitingDraw = null;
+        } else if (forced.length === 0) {
+          newReceipts.push({
+            key: `${snapshot.revision}-caughtup-${receipts.queue.length}`,
+            gained,
+            lost: [],
+            title: 'CARD RECEIVED',
+            text: `You received ${gained.map(cardLabel).join(', ')}.`,
+          });
+        }
+      }
+      if (!roundChanged && forced.length > 0 && selfId !== null) {
+        const foreignBridges = newLogEntries.filter(
+          (entry) =>
+            entry.kind === 'bridge' && entry.actorId !== null && entry.actorId !== selfId,
+        );
+        const taken = forced.filter((mine) =>
+          foreignBridges.some((entry) =>
+            entry.cards.some((placed) => cardEquals(placed, mine)),
+          ),
+        );
+        if (taken.length > 0) {
+          const bridgeEntry = [...foreignBridges]
+            .reverse()
+            .find((entry) =>
+              taken.some((mine) =>
+                entry.cards.some((placed) => cardEquals(placed, mine)),
+              ),
+            );
+          const actorId = bridgeEntry?.actorId ?? null;
+          const actorName = actorId
+            ? (selectParticipantName(snapshot, actorId) ?? 'An opponent')
+            : 'An opponent';
+          newReceipts.push({
+            key: `${snapshot.revision}-forced-${receipts.queue.length + newReceipts.length}`,
+            gained,
+            lost: taken,
+            title: 'CARD SWAPPED',
+            text: `${actorName} used the Joker to play your ${taken.map(cardLabel).join(', ')} — you received ${gained.length > 0 ? gained.map(cardLabel).join(', ') : 'nothing'} in return.`,
+          });
+        }
+      }
+      setReceipts({
+        tableId: snapshot.tableId,
+        revision: snapshot.revision,
+        roundNumber: game.roundNumber,
+        prevStatus: game.status,
+        prevHand: selfHand,
+        prevBoard: game.board,
+        awaitingDraw,
+        lastLogKey: nextLastLogKey,
+        queue: [...receipts.queue, ...newReceipts],
+      });
+    }
+  }
+  const currentReceipt = receipts?.queue[0] ?? null;
+
+  function confirmReceipt() {
+    setReceipts((current) =>
+      current ? { ...current, queue: current.queue.slice(1) } : current,
+    );
+  }
   const illegalPlayerName = selectParticipantName(snapshot, game.lastIllegalMovePlayerId);
   const illegalMessage = game.lastIllegalMovePlayerId
     ? illegalMoveMessage(illegalPlayerName ?? 'A player')
@@ -165,9 +304,25 @@ export function GameTable({
           ),
         )
       : 0;
+  const boardStep =
+    boardWidth > 0
+      ? Math.max(
+          12,
+          Math.min(
+            GameCardSize.compactWidth - 17,
+            (boardWidth - GameCardSize.compactWidth - 38) / (boardRanks.length - 1),
+          ),
+        )
+      : GameCardSize.compactWidth - 17;
 
   async function send(action: TurnAction) {
     setDrawConfirmation(null);
+    if (action.type === TurnActionType.RequestDraw) {
+      const donorId = drawDonorId;
+      setReceipts((current) =>
+        current ? { ...current, awaitingDraw: { donorId } } : current,
+      );
+    }
     await onSend(action);
     setSelection(null);
   }
@@ -289,67 +444,57 @@ export function GameTable({
           </ScrollView>
 
           <RoomPanel style={styles.boardPanel}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.suitRowsContent}
+            <View
+              style={styles.suitRows}
+              onLayout={({ nativeEvent }) => setBoardWidth(nativeEvent.layout.width)}
             >
-              <View style={styles.suitRows}>
-                {suitRuns.map(({ suit, cards }) => {
-                  const ranksOnBoard = new Map(
-                    cards.flatMap((card) =>
-                      isJokerCard(card) ? [] : [[card.rank, card] as const]),
-                  );
-                  return (
-                    <View key={suit} style={styles.suitRow}>
-                      <Text
-                        style={[
-                          styles.suitLabel,
-                          (suit === 'diamonds' || suit === 'hearts') && styles.redSuit,
-                        ]}
-                      >
-                        {suitGlyph(suit)}
-                      </Text>
-                      <View style={styles.run}>
-                        {boardRanks.map((rank, index) => {
-                          const card = ranksOnBoard.get(rank);
-                          if (card) {
-                            return (
-                              <View
-                                key={rank}
-                                style={index > 0 ? styles.overlapCard : undefined}
-                              >
-                                <PlayingCard card={card} compact />
-                              </View>
-                            );
-                          }
-                          if (cards.length === 0 && rank === Rank.Seven) {
-                            return (
-                              <View
-                                key={rank}
-                                style={index > 0 ? styles.overlapCard : undefined}
-                              >
-                                <PlayingCard
-                                  card={{ suit, rank: Rank.Seven }}
-                                  compact
-                                  placeholder
-                                />
-                              </View>
-                            );
-                          }
+              {suitRuns.map(({ suit, cards }) => {
+                const ranksOnBoard = new Map(
+                  cards.flatMap((card) =>
+                    isJokerCard(card) ? [] : [[card.rank, card] as const]),
+                );
+                return (
+                  <View key={suit} style={styles.suitRow}>
+                    <Text
+                      style={[
+                        styles.suitLabel,
+                        (suit === 'diamonds' || suit === 'hearts') && styles.redSuit,
+                      ]}
+                    >
+                      {suitGlyph(suit)}
+                    </Text>
+                    <View style={styles.run}>
+                      {boardRanks.map((rank, index) => {
+                        const overlap =
+                          index > 0
+                            ? { marginLeft: -(GameCardSize.compactWidth - boardStep) }
+                            : undefined;
+                        const card = ranksOnBoard.get(rank);
+                        if (card) {
                           return (
-                            <View
-                              key={rank}
-                              style={[styles.emptySlot, index > 0 && styles.overlapCard]}
-                            />
+                            <View key={rank} style={overlap}>
+                              <PlayingCard card={card} compact />
+                            </View>
                           );
-                        })}
-                      </View>
+                        }
+                        if (cards.length === 0 && rank === Rank.Seven) {
+                          return (
+                            <View key={rank} style={overlap}>
+                              <PlayingCard
+                                card={{ suit, rank: Rank.Seven }}
+                                compact
+                                placeholder
+                              />
+                            </View>
+                          );
+                        }
+                        return <View key={rank} style={[styles.emptySlot, overlap]} />;
+                      })}
+                    </View>
                     </View>
                   );
                 })}
               </View>
-            </ScrollView>
           </RoomPanel>
         </>
       )}
@@ -585,6 +730,37 @@ export function GameTable({
       </Modal>
 
       <Modal
+        visible={currentReceipt !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={confirmReceipt}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.drawConfirmCopy}>
+              <Text style={styles.drawConfirmTitle}>
+                {currentReceipt?.title ?? 'CARD RECEIVED'}
+              </Text>
+              <Text style={styles.drawConfirmText}>{currentReceipt?.text}</Text>
+            </View>
+            {(currentReceipt?.lost.length ?? 0) > 0 ? (
+              <View style={styles.receivedCards}>
+                {currentReceipt?.lost.map((card) => (
+                  <PlayingCard key={cardKey(card)} card={card} compact />
+                ))}
+              </View>
+            ) : null}
+            <View style={styles.receivedCards}>
+              {currentReceipt?.gained.map((card) => (
+                <PlayingCard key={cardKey(card)} card={card} />
+              ))}
+            </View>
+            <RoomButton label="Got it" variant="primary" compact onPress={confirmReceipt} />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
         visible={leaveConfirming}
         transparent
         animationType="fade"
@@ -702,12 +878,10 @@ const styles = StyleSheet.create({
   panelLabel: { color: GameColors.gold, fontSize: 10, fontWeight: '800', letterSpacing: 1.8 },
   turnLabel: { color: GameColors.cream, fontSize: 17, letterSpacing: 0 },
   suitRows: { gap: 8 },
-  suitRowsContent: { flexGrow: 1, justifyContent: 'center' },
   suitRow: { flexDirection: 'row', alignItems: 'center', minHeight: 58 },
   suitLabel: { width: 30, color: GameColors.cream, fontSize: 23, textAlign: 'center' },
   redSuit: { color: '#EE8C87' },
   run: { flex: 1, flexDirection: 'row', justifyContent: 'center', paddingRight: 8 },
-  overlapCard: { marginLeft: -17 },
   emptySlot: {
     width: GameCardSize.compactWidth,
     height: GameCardSize.compactHeight,
@@ -759,6 +933,7 @@ const styles = StyleSheet.create({
   },
   modalActions: { flexDirection: 'row', gap: 10 },
   modalButton: { flex: 1 },
+  receivedCards: { flexDirection: 'row', justifyContent: 'center', gap: 8 },
   drawConfirmCopy: { gap: 5 },
   drawConfirmTitle: { color: GameColors.gold, fontSize: 10, fontWeight: '900', letterSpacing: 1.6 },
   drawConfirmText: { color: GameColors.cream, lineHeight: 20 },

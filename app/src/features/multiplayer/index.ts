@@ -37,6 +37,7 @@ export type {
   SevensGameState,
   SevensLobbyMetadata,
   SevensMoveLogEntry,
+  SevensMoveLogKind,
   SevensParticipantMetadata,
   SevensParticipantRole,
   SevensRecoveryState,

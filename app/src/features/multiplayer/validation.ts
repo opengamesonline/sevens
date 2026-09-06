@@ -23,6 +23,7 @@ import {
   type SevensParticipantRole,
   type SevensGameState,
   type SevensMoveLogEntry,
+  type SevensMoveLogKind,
   type SevensScore,
 } from './types';
 
@@ -104,14 +105,31 @@ function isSevensScore(value: unknown): value is SevensScore {
   );
 }
 
+const MOVE_LOG_KINDS: readonly SevensMoveLogKind[] = [
+  'round',
+  'play',
+  'bridge',
+  'draw',
+  'give',
+  'illegal',
+  'win',
+];
+
 function isSevensMoveLogEntry(value: unknown): value is SevensMoveLogEntry {
-  return (
-    isRecord(value) &&
-    typeof value.key === 'string' &&
-    value.key.length > 0 &&
-    typeof value.text === 'string' &&
-    value.text.length > 0
-  );
+  if (
+    !isRecord(value) ||
+    typeof value.key !== 'string' ||
+    value.key.length === 0 ||
+    typeof value.text !== 'string' ||
+    value.text.length === 0 ||
+    !MOVE_LOG_KINDS.includes(value.kind as SevensMoveLogKind) ||
+    (value.actorId !== null &&
+      (typeof value.actorId !== 'string' || value.actorId.length === 0)) ||
+    !Array.isArray(value.cards)
+  ) {
+    return false;
+  }
+  return (value.cards as unknown[]).every(isCard);
 }
 
 function isSevensBot(value: unknown): value is SevensBot {  return (

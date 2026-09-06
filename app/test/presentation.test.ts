@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { JOKER_CARD, Rank, Suit, createEmptyBoard, placeCard } from '@opengamesonline/sevens';
+
+import { gainedCards, placedCards } from '../src/components/cards/card-text';
 import { sortByLobbyStandings } from '../src/features/multiplayer/presentation';
 
 function points(entries: readonly (readonly [string, number])[]): Map<string, number> {
@@ -50,4 +53,40 @@ test('keeps join order for full ties and does not mutate the input', () => {
 
   assert.deepEqual(sorted.map((row) => row.id), ['alice', 'bob', 'carol']);
   assert.deepEqual(rows.map((row) => row.id), ['alice', 'bob', 'carol']);
+});
+
+test('gainedCards reports only newly arrived cards', () => {
+  const sevenSpades = { suit: Suit.Spades, rank: Rank.Seven };
+  const eightSpades = { suit: Suit.Spades, rank: Rank.Eight };
+  const nineHearts = { suit: Suit.Hearts, rank: Rank.Nine };
+
+  assert.deepEqual(
+    gainedCards([sevenSpades, eightSpades], [sevenSpades, eightSpades, nineHearts]),
+    [nineHearts],
+  );
+  assert.deepEqual(gainedCards([sevenSpades], [sevenSpades]), []);
+  assert.deepEqual(gainedCards([JOKER_CARD], [JOKER_CARD]), []);
+  assert.deepEqual(gainedCards([], [sevenSpades]), [sevenSpades]);
+});
+
+test('gainedCards in reverse reports lost cards', () => {
+  const sevenSpades = { suit: Suit.Spades, rank: Rank.Seven };
+  const eightSpades = { suit: Suit.Spades, rank: Rank.Eight };
+
+  assert.deepEqual(
+    gainedCards([sevenSpades], [sevenSpades, eightSpades]),
+    [eightSpades],
+  );
+});
+
+test('placedCards only reports lost cards that landed on the board', () => {
+  const sevenSpades = { suit: Suit.Spades, rank: Rank.Seven };
+  const eightSpades = { suit: Suit.Spades, rank: Rank.Eight };
+  const nineHearts = { suit: Suit.Hearts, rank: Rank.Nine };
+  const prevBoard = placeCard(createEmptyBoard(), sevenSpades);
+  const board = placeCard(prevBoard, eightSpades);
+
+  assert.deepEqual(placedCards(prevBoard, board, [eightSpades]), [eightSpades]);
+  assert.deepEqual(placedCards(prevBoard, board, [nineHearts]), []);
+  assert.deepEqual(placedCards(prevBoard, board, [JOKER_CARD]), []);
 });
