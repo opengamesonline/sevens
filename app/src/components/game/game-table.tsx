@@ -36,6 +36,22 @@ const handSuitOrder: Record<Suit, number> = {
   [Suit.Hearts]: 3,
 };
 
+const boardRanks: readonly Rank[] = [
+  Rank.Ace,
+  Rank.Two,
+  Rank.Three,
+  Rank.Four,
+  Rank.Five,
+  Rank.Six,
+  Rank.Seven,
+  Rank.Eight,
+  Rank.Nine,
+  Rank.Ten,
+  Rank.Jack,
+  Rank.Queen,
+  Rank.King,
+];
+
 export function GameTable({
   snapshot,
   actionPending,
@@ -247,31 +263,67 @@ export function GameTable({
           </ScrollView>
 
           <RoomPanel style={styles.boardPanel}>
-            <View style={styles.suitRows}>
-              {suitRuns.map(({ suit, cards }) => (
-                <View key={suit} style={styles.suitRow}>
-                  <Text
-                    style={[
-                      styles.suitLabel,
-                      (suit === 'diamonds' || suit === 'hearts') && styles.redSuit,
-                    ]}
-                  >
-                    {suitGlyph(suit)}
-                  </Text>
-                  <View style={styles.run}>
-                    {cards.length === 0 ? (
-                      <PlayingCard card={{ suit, rank: Rank.Seven }} compact placeholder />
-                    ) : (
-                      cards.map((card, index) => (
-                        <View key={cardKey(card)} style={index > 0 ? styles.overlapCard : undefined}>
-                          <PlayingCard card={card} compact />
-                        </View>
-                      ))
-                    )}
-                  </View>
-                </View>
-              ))}
-            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.suitRowsContent}
+            >
+              <View style={styles.suitRows}>
+                {suitRuns.map(({ suit, cards }) => {
+                  const ranksOnBoard = new Map(
+                    cards.flatMap((card) =>
+                      isJokerCard(card) ? [] : [[card.rank, card] as const]),
+                  );
+                  return (
+                    <View key={suit} style={styles.suitRow}>
+                      <Text
+                        style={[
+                          styles.suitLabel,
+                          (suit === 'diamonds' || suit === 'hearts') && styles.redSuit,
+                        ]}
+                      >
+                        {suitGlyph(suit)}
+                      </Text>
+                      <View style={styles.run}>
+                        {boardRanks.map((rank, index) => {
+                          const card = ranksOnBoard.get(rank);
+                          if (card) {
+                            return (
+                              <View
+                                key={rank}
+                                style={index > 0 ? styles.overlapCard : undefined}
+                              >
+                                <PlayingCard card={card} compact />
+                              </View>
+                            );
+                          }
+                          if (cards.length === 0 && rank === Rank.Seven) {
+                            return (
+                              <View
+                                key={rank}
+                                style={index > 0 ? styles.overlapCard : undefined}
+                              >
+                                <PlayingCard
+                                  card={{ suit, rank: Rank.Seven }}
+                                  compact
+                                  placeholder
+                                />
+                              </View>
+                            );
+                          }
+                          return (
+                            <View
+                              key={rank}
+                              style={[styles.emptySlot, index > 0 && styles.overlapCard]}
+                            />
+                          );
+                        })}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
           </RoomPanel>
         </>
       )}
@@ -549,11 +601,16 @@ const styles = StyleSheet.create({
   panelLabel: { color: GameColors.gold, fontSize: 10, fontWeight: '800', letterSpacing: 1.8 },
   turnLabel: { color: GameColors.cream, fontSize: 17, letterSpacing: 0 },
   suitRows: { gap: 8 },
+  suitRowsContent: { flexGrow: 1, justifyContent: 'center' },
   suitRow: { flexDirection: 'row', alignItems: 'center', minHeight: 58 },
   suitLabel: { width: 30, color: GameColors.cream, fontSize: 23, textAlign: 'center' },
   redSuit: { color: '#EE8C87' },
   run: { flex: 1, flexDirection: 'row', justifyContent: 'center', paddingRight: 8 },
   overlapCard: { marginLeft: -17 },
+  emptySlot: {
+    width: GameCardSize.compactWidth,
+    height: GameCardSize.compactHeight,
+  },
   drawNotice: {
     borderRadius: 14,
     borderWidth: 1,
