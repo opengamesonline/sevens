@@ -12,4 +12,4 @@
 - [ ] Keep the number of cards on each row from changing
 - [ ] Keep the 7s row aligned on the board
 - [ ] Lobby sorts by points
-- [ ] Fix: cannot play 8 of Hearts to force 8 of Spades with the Joker
+- [x] Fix: cannot play 8 of Hearts to force 8 of Spades with the Joker
