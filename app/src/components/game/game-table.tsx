@@ -9,7 +9,7 @@ import {
   type TurnAction,
 } from '@opengamesonline/sevens';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { cardKey, PlayingCard, suitGlyph } from '@/components/cards/playing-card';
 import { RoomButton, RoomPanel } from '@/components/room/room-ui';
@@ -58,7 +58,9 @@ export function GameTable({
   const game = snapshot.state;
   const [selection, setSelection] = useState<{ card: Card; revision: number } | null>(null);
   const [handWidth, setHandWidth] = useState(0);
+  const [drawConfirmation, setDrawConfirmation] = useState<{ revision: number } | null>(null);
   const selectedCard = selection?.revision === snapshot.revision ? selection.card : null;
+  const isDrawConfirming = drawConfirmation?.revision === snapshot.revision;
 
   if (!game) {
     return (
@@ -84,6 +86,13 @@ export function GameTable({
   const currentName = selectParticipantName(snapshot, game.currentPlayerId) ?? 'Unknown player';
   const requesterName = selectParticipantName(snapshot, game.pendingDraw?.requesterId ?? null);
   const donorName = selectParticipantName(snapshot, game.pendingDraw?.donorId ?? null);
+  const currentPlayerIndex = game.players.findIndex(({ id }) => id === game.currentPlayerId);
+  const drawDonorId =
+    currentPlayerIndex >= 0
+      ? (game.players[(currentPlayerIndex - 1 + game.players.length) % game.players.length]?.id ??
+        null)
+      : null;
+  const drawDonorName = selectParticipantName(snapshot, drawDonorId);
   const illegalPlayerName = selectParticipantName(snapshot, game.lastIllegalMovePlayerId);
   const illegalMessage = game.lastIllegalMovePlayerId
     ? illegalMoveMessage(illegalPlayerName ?? 'A player')
@@ -123,6 +132,7 @@ export function GameTable({
   );
 
   async function send(action: TurnAction) {
+    setDrawConfirmation(null);
     await onSend(action);
     setSelection(null);
   }
@@ -380,6 +390,39 @@ export function GameTable({
         </View>
       ) : null}
 
+      <Modal
+        visible={showTurnActions && isDrawConfirming}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDrawConfirmation(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.drawConfirmCopy}>
+              <Text style={styles.drawConfirmTitle}>DRAW A CARD?</Text>
+              <Text style={styles.drawConfirmText}>
+                Drawing takes a card from {drawDonorName ?? 'your opponent'} and ends your chance
+                to play this turn. This can&apos;t be undone.
+              </Text>
+            </View>
+            <View style={styles.modalActions}>
+              <View style={styles.modalButton}>
+                <RoomButton label="Cancel" compact onPress={() => setDrawConfirmation(null)} />
+              </View>
+              <View style={styles.modalButton}>
+                <RoomButton
+                  label={actionPending ? 'Drawing…' : 'Confirm draw'}
+                  variant="primary"
+                  compact
+                  disabled={actionPending}
+                  onPress={() => void send({ type: TurnActionType.RequestDraw })}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {showTurnActions ? (
         <View style={styles.actions}>
           <View style={styles.actionButton}>
@@ -399,7 +442,7 @@ export function GameTable({
               label="Draw"
               compact
               disabled={actionPending}
-              onPress={() => void send({ type: TurnActionType.RequestDraw })}
+              onPress={() => setDrawConfirmation({ revision: snapshot.revision })}
             />
           </View>
           <View style={styles.actionButton}>
@@ -520,6 +563,28 @@ const styles = StyleSheet.create({
   },
   drawNoticeTitle: { color: GameColors.gold, fontSize: 10, fontWeight: '900', letterSpacing: 1.6 },
   drawNoticeText: { color: GameColors.cream, marginTop: 5, lineHeight: 20 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: GameColors.gold,
+    padding: 18,
+    gap: 16,
+    backgroundColor: GameColors.panelSolid,
+  },
+  modalActions: { flexDirection: 'row', gap: 10 },
+  modalButton: { flex: 1 },
+  drawConfirmCopy: { gap: 5 },
+  drawConfirmTitle: { color: GameColors.gold, fontSize: 10, fontWeight: '900', letterSpacing: 1.6 },
+  drawConfirmText: { color: GameColors.cream, lineHeight: 20 },
   illegalNotice: {
     borderRadius: 12,
     borderWidth: 1,
