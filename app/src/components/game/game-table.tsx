@@ -136,16 +136,24 @@ export function GameTable({
   const cardsPerHandRow = handWidth
     ? Math.max(1, Math.min(10, Math.floor((handWidth - handCardWidth) / 25) + 1))
     : 8;
-  const handRowCount = Math.ceil(sortedHand.length / cardsPerHandRow);
-  const balancedCardsPerRow = handRowCount
-    ? Math.ceil(sortedHand.length / handRowCount)
-    : 0;
-  const handRows = Array.from({ length: handRowCount }, (_, index) =>
-    sortedHand.slice(
-      index * balancedCardsPerRow,
-      (index + 1) * balancedCardsPerRow,
-    ),
+  const handRows = Array.from(
+    { length: Math.ceil(sortedHand.length / cardsPerHandRow) },
+    (_, index) =>
+      sortedHand.slice(
+        index * cardsPerHandRow,
+        (index + 1) * cardsPerHandRow,
+      ),
   );
+  const handCardStep =
+    cardsPerHandRow > 1 && handWidth > 0
+      ? Math.max(
+          0,
+          Math.min(
+            handCardWidth + 8,
+            (handWidth - handCardWidth) / (cardsPerHandRow - 1),
+          ),
+        )
+      : 0;
 
   async function send(action: TurnAction) {
     setDrawConfirmation(null);
@@ -360,17 +368,7 @@ export function GameTable({
             onLayout={({ nativeEvent }) => setHandWidth(nativeEvent.layout.width)}
           >
             {handRows.map((row) => {
-              const cardStep =
-                row.length > 1 && handWidth > 0
-                  ? Math.max(
-                      0,
-                      Math.min(
-                        handCardWidth + 8,
-                        (handWidth - handCardWidth) / (row.length - 1),
-                      ),
-                    )
-                  : 0;
-              const rowWidth = handCardWidth + cardStep * (row.length - 1);
+              const rowWidth = handCardWidth + handCardStep * (row.length - 1);
 
               return (
                 <View
@@ -385,7 +383,7 @@ export function GameTable({
                     return (
                       <View
                         key={cardKey(card)}
-                        style={[styles.overlappingHandCard, { left: cardStep * index }]}
+                        style={[styles.overlappingHandCard, { left: handCardStep * index }]}
                       >
                         <PlayingCard
                           card={card}
@@ -661,6 +659,7 @@ const styles = StyleSheet.create({
   },
   handRow: {
     position: 'relative',
+    alignSelf: 'flex-start',
     height: GameCardSize.compactHeight * 2,
   },
   overlappingHandCard: { position: 'absolute', top: 0 },
