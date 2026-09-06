@@ -6,6 +6,8 @@ export type { CreateSevensPolicyOptions, SevensPolicy } from './sevens-policy';
 export {
   selectOpponents,
   selectOwnHand,
+  selectHostSuccessor,
+  selectMissingLeaverId,
   selectParticipantName,
   selectParticipantNames,
   selectPlayableCards,
@@ -34,7 +36,7 @@ export type {
   SevensGameEvent,
   SevensGameState,
   SevensLobbyMetadata,
-  SevensMultiplayer,
+  SevensMoveLogEntry,
   SevensParticipantMetadata,
   SevensParticipantRole,
   SevensRecoveryState,

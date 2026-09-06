@@ -41,6 +41,43 @@ export function selectParticipantName(
   return selectParticipantNames(snapshot)[participantId] ?? null;
 }
 
+export function selectHostSuccessor(
+  snapshot: SevensSessionSnapshot | null,
+): { id: string; name: string } | null {  const hostId = snapshot?.hostParticipantId;
+  if (!snapshot || !hostId) return null;
+  const hostIndex = snapshot.hostOrder.indexOf(hostId);
+  const rotated =
+    hostIndex >= 0
+      ? [...snapshot.hostOrder.slice(hostIndex + 1), ...snapshot.hostOrder.slice(0, hostIndex + 1)]
+      : [...snapshot.hostOrder];
+  const successorId = rotated.find(
+    (id) => id !== hostId && snapshot.connectedParticipantIds.includes(id),
+  );
+  if (!successorId) return null;
+  const name = selectParticipantName(snapshot, successorId);
+  return name ? { id: successorId, name } : null;
+}
+
+export function selectMissingLeaverId(
+  snapshot: SevensSessionSnapshot | null,
+): string | null {
+  const game = snapshot?.state;
+  if (
+    !snapshot ||
+    !game ||
+    snapshot.phase !== 'started' ||
+    game.status !== GameStatus.Active
+  ) {
+    return null;
+  }
+  const memberIds = new Set(snapshot.participants.map(({ id }) => id));
+  return (
+    game.players.find(
+      ({ id }) => !memberIds.has(id) && !game.bots.some((bot) => bot.id === id),
+    )?.id ?? null
+  );
+}
+
 export function selectOwnHand(snapshot: SevensSessionSnapshot | null): readonly Card[] | null {
   if (!snapshot?.state || snapshot.self?.metadata.role !== 'player') return null;
   return snapshot.state.players.find(({ id }) => id === snapshot.self?.id)?.hand ?? null;
@@ -57,7 +94,7 @@ export function selectOpponents(
     .filter(({ id }) => id !== ownPlayerId)
     .map(({ id, hand }) => ({
       id,
-      name: names[id] ?? id,
+      name: names[id] ?? 'Left table',
       cardCount: hand.length,
       isCurrentPlayer: id === snapshot.state?.currentPlayerId,
     }));

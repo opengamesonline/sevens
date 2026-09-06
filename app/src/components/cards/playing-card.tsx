@@ -1,30 +1,11 @@
-import { Rank, Suit, isJokerCard, type Card } from '@opengamesonline/sevens';
+import { Suit, isJokerCard, type Card } from '@opengamesonline/sevens';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GameCardSize, GameColors } from '@/constants/theme';
 
-const rankLabels: Record<Rank, string> = {
-  [Rank.Ace]: 'A',
-  [Rank.Two]: '2',
-  [Rank.Three]: '3',
-  [Rank.Four]: '4',
-  [Rank.Five]: '5',
-  [Rank.Six]: '6',
-  [Rank.Seven]: '7',
-  [Rank.Eight]: '8',
-  [Rank.Nine]: '9',
-  [Rank.Ten]: '10',
-  [Rank.Jack]: 'J',
-  [Rank.Queen]: 'Q',
-  [Rank.King]: 'K',
-};
+import { rankLabels, suitGlyphs } from './card-text';
 
-const suitGlyphs: Record<Suit, string> = {
-  [Suit.Clubs]: '♣',
-  [Suit.Diamonds]: '♦',
-  [Suit.Hearts]: '♥',
-  [Suit.Spades]: '♠',
-};
+export { cardLabel, suitGlyph } from './card-text';
 
 export function cardKey(card: Card): string {
   if (isJokerCard(card)) return 'joker';
@@ -121,10 +102,6 @@ export function PlayingCard({
       )}
     </Pressable>
   );
-}
-
-export function suitGlyph(suit: Suit): string {
-  return suitGlyphs[suit];
 }
 
 const styles = StyleSheet.create({

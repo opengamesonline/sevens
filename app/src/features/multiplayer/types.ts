@@ -13,7 +13,7 @@ import type {
 } from '@opengamesonline/sevens';
 
 export const SEVENS_APP_ID = 'com.opengamesonline.sevens' as const;
-export const SEVENS_GAME_VERSION = 3 as const;
+export const SEVENS_GAME_VERSION = 4 as const;
 export const MIN_SEVENS_PLAYERS = 3 as const;
 export const MAX_SEVENS_PLAYERS = 7 as const;
 
@@ -41,12 +41,18 @@ export type SevensScore = {
   points: number;
 };
 
+export type SevensMoveLogEntry = {
+  key: string;
+  text: string;
+};
+
 export type SevensGameState = SevensGameObject & {
   readonly lastIllegalMovePlayerId: string | null;
   readonly bots: readonly SevensBot[];
   readonly roundNumber: number;
   readonly latestScores: readonly SevensScore[];
   readonly cumulativeScores: readonly SevensScore[];
+  readonly moveLog: readonly SevensMoveLogEntry[];
 };
 
 export type SevensParticipantMetadata = {

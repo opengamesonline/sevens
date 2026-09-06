@@ -8,8 +8,8 @@ import {
   type Card,
   type TurnAction,
 } from '@opengamesonline/sevens';
-import { useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { cardKey, PlayingCard, suitGlyph } from '@/components/cards/playing-card';
 import { RoomButton, RoomPanel } from '@/components/room/room-ui';
@@ -75,8 +75,12 @@ export function GameTable({
   const [selection, setSelection] = useState<{ card: Card; revision: number } | null>(null);
   const [handWidth, setHandWidth] = useState(0);
   const [drawConfirmation, setDrawConfirmation] = useState<{ revision: number } | null>(null);
+  const [leaveConfirming, setLeaveConfirming] = useState(false);
+  const [logVisible, setLogVisible] = useState(false);
+  const logScrollRef = useRef<ScrollView>(null);
   const selectedCard = selection?.revision === snapshot.revision ? selection.card : null;
   const isDrawConfirming = drawConfirmation?.revision === snapshot.revision;
+  const visibleLogEntries = game?.moveLog ?? [];
 
   if (!game) {
     return (
@@ -99,6 +103,12 @@ export function GameTable({
   const isDonor = isPlayer && game.pendingDraw?.donorId === selfId;
   const isRequester = isPlayer && game.pendingDraw?.requesterId === selfId;
   const winnerName = selectParticipantName(snapshot, game.winnerId);
+  const leaveWarning =
+    game.status === GameStatus.Active
+      ? 'Leaving ends the game for everyone.'
+      : snapshot.role === 'host'
+        ? 'Leaving closes the table for everyone.'
+        : 'Leaving gives up your seat.';
   const currentName = selectParticipantName(snapshot, game.currentPlayerId) ?? 'Unknown player';
   const requesterName = selectParticipantName(snapshot, game.pendingDraw?.requesterId ?? null);
   const donorName = selectParticipantName(snapshot, game.pendingDraw?.donorId ?? null);
@@ -170,6 +180,11 @@ export function GameTable({
       !game.bots.some((bot) => bot.id === id) &&
       !snapshot.connectedParticipantIds.includes(id),
   );
+  const participantIds = new Set(snapshot.participants.map(({ id }) => id));
+  const missingPlayerLeft =
+    missingPlayer !== undefined &&
+    missingPlayer.id !== snapshot.self?.id &&
+    !participantIds.has(missingPlayer.id);
   const turnStatus =
     game.status === GameStatus.Finished
       ? `${winnerName ?? 'A player'} wins`
@@ -209,7 +224,9 @@ export function GameTable({
               ? reconnecting
                 ? 'Reconnecting to the table…'
                 : 'Your connection to the table was lost.'
-              : `Waiting for ${selectParticipantName(snapshot, missingPlayer.id) ?? 'a player'} to reconnect.`}
+              : missingPlayerLeft
+                ? 'A player left the table. The match cannot continue.'
+                : `Waiting for ${selectParticipantName(snapshot, missingPlayer.id) ?? 'a player'} to reconnect.`}
           </Text>
         </View>
       ) : null}
@@ -355,6 +372,50 @@ export function GameTable({
         </View>
       ) : null}
 
+      {game.status === GameStatus.Finished ? null : (
+        <View style={styles.actions}>
+          <View style={styles.actionButton}>
+            <RoomButton
+              label="Play selected"
+              variant="primary"
+              compact
+              disabled={!showTurnActions || !canAttemptPlay(selectedCard, actionPending)}
+              onPress={() => {
+                if (!selectedCard) return;
+                void send({ type: TurnActionType.Play, card: selectedCard });
+              }}
+            />
+          </View>
+          <View style={styles.actionButton}>
+            <RoomButton
+              label="Draw"
+              compact
+              disabled={!showTurnActions || actionPending}
+              onPress={() => setDrawConfirmation({ revision: snapshot.revision })}
+            />
+          </View>
+          <View style={styles.actionButton}>
+            <RoomButton
+              label={leaveLabel}
+              variant="danger"
+              compact
+              onPress={() => setLeaveConfirming(true)}
+            />
+          </View>
+        </View>
+      )}
+
+      {game.status === GameStatus.Active && !missingPlayer && isDonor ? (
+        <RoomButton
+          label="Give selected card"
+          variant="primary"
+          disabled={actionPending || !selectedCard}
+          onPress={() => {
+            if (selectedCard) void send({ type: TurnActionType.GiveCard, card: selectedCard });
+          }}
+        />
+      ) : null}
+
       {game.status === GameStatus.Finished ? null : hand ? (
         <View style={styles.handSection}>
           <View style={styles.handHeading}>
@@ -363,6 +424,20 @@ export function GameTable({
             </Text>
             <Text style={styles.handCount}>{hand.length} cards</Text>
           </View>
+          {visibleLogEntries.length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open move log"
+              onPress={() => setLogVisible(true)}
+              style={({ pressed }) => [styles.logPreview, pressed && styles.logPreviewPressed]}
+            >
+              <Text style={styles.logPreviewTitle}>LOG · {visibleLogEntries.length}</Text>
+              <Text style={styles.logPreviewText} numberOfLines={1}>
+                {visibleLogEntries[visibleLogEntries.length - 1]!.text}
+              </Text>
+              <Text style={styles.logPreviewChevron}>▸</Text>
+            </Pressable>
+          ) : null}
           <View
             style={styles.hand}
             onLayout={({ nativeEvent }) => setHandWidth(nativeEvent.layout.width)}
@@ -414,17 +489,6 @@ export function GameTable({
         </View>
       )}
 
-      {game.status === GameStatus.Active && !missingPlayer && isDonor ? (
-        <RoomButton
-          label="Give selected card"
-          variant="primary"
-          disabled={actionPending || !selectedCard}
-          onPress={() => {
-            if (selectedCard) void send({ type: TurnActionType.GiveCard, card: selectedCard });
-          }}
-        />
-      ) : null}
-
       {game.status === GameStatus.Finished && snapshot.role === 'host' ? (
         <RoomButton
           label={continuePending ? 'Returning to lobby…' : 'Continue to lobby'}
@@ -439,6 +503,50 @@ export function GameTable({
           <Text style={styles.continueNoticeText}>Waiting for the host to continue.</Text>
         </View>
       ) : null}
+
+      {game.status === GameStatus.Finished ? (
+        <RoomButton
+          label={leaveLabel}
+          variant="danger"
+          onPress={() => setLeaveConfirming(true)}
+        />
+      ) : null}
+
+      <Modal
+        visible={logVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLogVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.logTitle}>MOVE LOG · {visibleLogEntries.length}</Text>
+            <ScrollView
+              ref={logScrollRef}
+              nestedScrollEnabled
+              style={styles.logList}
+              onContentSizeChange={() => logScrollRef.current?.scrollToEnd({ animated: true })}
+            >
+              {visibleLogEntries.length > 0 ? (
+                visibleLogEntries.map((entry, index) => (
+                  <Text
+                    key={entry.key}
+                    style={[
+                      styles.logEntry,
+                      index === visibleLogEntries.length - 1 && styles.logEntryLatest,
+                    ]}
+                  >
+                    {entry.text}
+                  </Text>
+                ))
+              ) : (
+                <Text style={styles.logEntry}>No moves yet.</Text>
+              )}
+            </ScrollView>
+            <RoomButton label="Close" compact onPress={() => setLogVisible(false)} />
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={showTurnActions && isDrawConfirming}
@@ -473,46 +581,38 @@ export function GameTable({
         </View>
       </Modal>
 
-      {showTurnActions ? (
-        <View style={styles.actions}>
-          <View style={styles.actionButton}>
-            <RoomButton
-              label="Play selected"
-              variant="primary"
-              compact
-              disabled={!canAttemptPlay(selectedCard, actionPending)}
-              onPress={() => {
-                if (!selectedCard) return;
-                void send({ type: TurnActionType.Play, card: selectedCard });
-              }}
-            />
-          </View>
-          <View style={styles.actionButton}>
-            <RoomButton
-              label="Draw"
-              compact
-              disabled={actionPending}
-              onPress={() => setDrawConfirmation({ revision: snapshot.revision })}
-            />
-          </View>
-          <View style={styles.actionButton}>
-            <RoomButton
-              label={leaveLabel}
-              variant="danger"
-              compact
-              onPress={onLeave}
-            />
+      <Modal
+        visible={leaveConfirming}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLeaveConfirming(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.drawConfirmCopy}>
+              <Text style={styles.drawConfirmTitle}>LEAVE THIS TABLE?</Text>
+              <Text style={styles.drawConfirmText}>{leaveWarning}</Text>
+            </View>
+            <View style={styles.modalActions}>
+              <View style={styles.modalButton}>
+                <RoomButton label="Cancel" compact onPress={() => setLeaveConfirming(false)} />
+              </View>
+              <View style={styles.modalButton}>
+                <RoomButton
+                  label={leaveLabel}
+                  variant="danger"
+                  compact
+                  onPress={() => {
+                    setLeaveConfirming(false);
+                    onLeave();
+                  }}
+                />
+              </View>
+            </View>
           </View>
         </View>
-      ) : null}
+      </Modal>
 
-      {!showTurnActions ? (
-        <RoomButton
-          label={leaveLabel}
-          variant="danger"
-          onPress={onLeave}
-        />
-      ) : null}
     </View>
   );
 }
@@ -618,6 +718,25 @@ const styles = StyleSheet.create({
   },
   drawNoticeTitle: { color: GameColors.gold, fontSize: 10, fontWeight: '900', letterSpacing: 1.6 },
   drawNoticeText: { color: GameColors.cream, marginTop: 5, lineHeight: 20 },
+  logTitle: { color: GameColors.gold, fontSize: 10, fontWeight: '900', letterSpacing: 1.6 },
+  logPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: GameColors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(0,0,0,0.13)',
+  },
+  logPreviewPressed: { opacity: 0.7 },
+  logPreviewTitle: { color: GameColors.gold, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
+  logPreviewText: { flex: 1, color: GameColors.creamMuted, fontSize: 12 },
+  logPreviewChevron: { color: GameColors.gold, fontSize: 12, fontWeight: '900' },
+  logList: { maxHeight: 300 },
+  logEntry: { color: GameColors.whiteMuted, fontSize: 12, lineHeight: 19 },
+  logEntryLatest: { color: GameColors.cream },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',

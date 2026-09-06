@@ -1,4 +1,4 @@
-import { BotPlaystyle, SevensVariant } from '@opengamesonline/sevens';
+import { BotPlaystyle, GameStatus, SevensVariant } from '@opengamesonline/sevens';
 import type { Participant } from '@opengamesonline/expo-lan-multiplayer';
 import { router } from 'expo-router';
 import { useEffect, useEffectEvent, useState } from 'react';
@@ -59,15 +59,20 @@ export default function SessionScreen() {
 
   function confirmLeave() {
     const isHost = snapshot?.role === 'host';
+    const endsTable =
+      snapshot?.phase !== 'lobby' &&
+      (isHost || snapshot?.state?.status === GameStatus.Active);
     Alert.alert(
-      isHost ? 'Close this table?' : 'Leave this table?',
-      isHost
-        ? 'The lobby or game will end for everyone.'
-        : 'Leaving permanently gives up your reserved seat and recovery identity.',
+      'Leave this table?',
+      endsTable
+        ? 'Leaving ends the game for everyone.'
+        : isHost
+          ? 'Leaving closes the table for everyone.'
+          : 'Leaving permanently gives up your reserved seat and recovery identity.',
       [
         { text: 'Stay', style: 'cancel' },
         {
-          text: isHost ? 'Close table' : 'Leave',
+          text: 'Leave',
           style: 'destructive',
           onPress: () => void leaveSession(),
         },
@@ -130,7 +135,7 @@ export default function SessionScreen() {
           onContinue={continueGame}
           onRetryConnection={retryConnection}
           onSend={send}
-          onLeave={confirmLeave}
+          onLeave={() => void leaveSession()}
         />
       </RoomScreen>
     );

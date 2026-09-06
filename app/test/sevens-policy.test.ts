@@ -86,6 +86,7 @@ test('initializes from finalized player roles and excludes a spectator host', ()
   assert.equal(game.roundNumber, 1);
   assert.deepEqual(game.latestScores, []);
   assert.deepEqual(game.cumulativeScores, []);
+  assert.deepEqual(game.moveLog, [{ key: '1-0', text: 'Round 1 dealt.' }]);
 });
 
 test('computes role-aware lobby metadata and enforces lobby policy', () => {
@@ -101,7 +102,7 @@ test('computes role-aware lobby metadata and enforces lobby policy', () => {
 
   assert.deepEqual(lobbyMetadata(policy, participants), {
     appId: 'com.opengamesonline.sevens',
-    gameVersion: 3,
+    gameVersion: 4,
     playerCount: 3,
     spectatorCount: 1,
     minPlayers: 3,
@@ -216,6 +217,7 @@ test('only accepts bot actions attributed to the host', () => {
     roundNumber: 1,
     latestScores: [],
     cumulativeScores: [],
+    moveLog: [],
   };
   const event = {
     type: SEVENS_BOT_TURN_EVENT,
@@ -279,6 +281,7 @@ test('applies a serialized Joker bridge play through the host policy', () => {
     roundNumber: 1,
     latestScores: [],
     cumulativeScores: [],
+    moveLog: [],
   };
   const serializedGame = JSON.parse(JSON.stringify(game)) as SevensGameState;
   const serializedAction = JSON.parse(
@@ -288,12 +291,17 @@ test('applies a serialized Joker bridge play through the host policy', () => {
     }),
   ) as TurnAction;
 
+  policy.createInitialState([alice, bob, carol]);
   const result = reduceEvent(policy, serializedGame, serializedAction, alice);
 
   assert.deepEqual(result.board[Suit.Hearts], { min: Rank.Seven, max: Rank.Ten });
   assert.equal(result.players[0]!.hand.length, 0);
   assert.equal(result.players[1]!.hand.some(isJokerCard), true);
   assert.equal(result.winnerId, alice.id);
+  assert.deepEqual(result.moveLog, [
+    { key: '1-0', text: 'Alice played 9♥, 10♥.' },
+    { key: '1-1', text: 'Alice wins round 1 · 0 pts' },
+  ]);
 });
 
 test('persists latest and cumulative scores across rounds', () => {
@@ -325,6 +333,11 @@ test('persists latest and cumulative scores across rounds', () => {
   );
 
   assert.equal(firstResult.status, GameStatus.Finished);
+  assert.deepEqual(firstResult.moveLog, [
+    { key: '1-0', text: 'Round 1 dealt.' },
+    { key: '1-1', text: 'Alice played 7♠.' },
+    { key: '1-2', text: 'Alice wins round 1 · 0 pts' },
+  ]);
   assert.deepEqual(firstResult.latestScores, [
     { playerId: alice.id, playerName: alice.name, points: 0 },
     { playerId: bob.id, playerName: bob.name, points: 15 },
@@ -335,6 +348,7 @@ test('persists latest and cumulative scores across rounds', () => {
 
   const secondInitial = policy.createInitialState(participants);
   assert.equal(secondInitial.roundNumber, 2);
+  assert.deepEqual(secondInitial.moveLog, [{ key: '2-0', text: 'Round 2 dealt.' }]);
   assert.deepEqual(secondInitial.latestScores, firstResult.latestScores);
   const secondRound: SevensGameState = {
     ...secondInitial,
@@ -408,6 +422,18 @@ test('uses connection-bound actors for the two-step draw flow', () => {
   assert.equal(illegalAttempt.currentPlayerId, game.currentPlayerId);
   assert.deepEqual(illegalAttempt.board, game.board);
   assert.deepEqual(illegalAttempt.players, game.players);
+  assert.deepEqual(illegalAttempt.moveLog, [
+    { key: '1-0', text: 'Round 1 dealt.' },
+    { key: '1-1', text: `${requester.name} tried to play an illegal move.` },
+  ]);
+
+  const repeatIllegal = reduceEvent(
+    policy,
+    illegalAttempt,
+    { type: TurnActionType.Play, card: illegalOpeningCard },
+    requester,
+  );
+  assert.deepEqual(repeatIllegal.moveLog, illegalAttempt.moveLog);
 
   const pending = reduceEvent(
     policy,
@@ -420,6 +446,10 @@ test('uses connection-bound actors for the two-step draw flow', () => {
     donorId: donor.id,
   });
   assert.equal(pending.lastIllegalMovePlayerId, null);
+  assert.deepEqual(
+    pending.moveLog.map(({ text }) => text),
+    ['Round 1 dealt.', `${requester.name} tried to play an illegal move.`, `${requester.name} draws from ${donor.name}.`],
+  );
 
   const donorCard = pending.players.find(({ id }) => id === donor.id)!.hand[0]!;
   const completed = reduceEvent(
@@ -432,6 +462,10 @@ test('uses connection-bound actors for the two-step draw flow', () => {
   assert.equal(
     completed.players.find(({ id }) => id === requester.id)!.hand.length,
     game.players.find(({ id }) => id === requester.id)!.hand.length + 1,
+  );
+  assert.equal(
+    completed.moveLog[completed.moveLog.length - 1]!.text,
+    `${donor.name} gave a card to ${requester.name}.`,
   );
 
   const spectatorAttempt = reduceEvent(

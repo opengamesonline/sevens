@@ -22,6 +22,7 @@ import {
   type SevensParticipantMetadata,
   type SevensParticipantRole,
   type SevensGameState,
+  type SevensMoveLogEntry,
   type SevensScore,
 } from './types';
 
@@ -102,8 +103,17 @@ function isSevensScore(value: unknown): value is SevensScore {
   );
 }
 
-function isSevensBot(value: unknown): value is SevensBot {
+function isSevensMoveLogEntry(value: unknown): value is SevensMoveLogEntry {
   return (
+    isRecord(value) &&
+    typeof value.key === 'string' &&
+    value.key.length > 0 &&
+    typeof value.text === 'string' &&
+    value.text.length > 0
+  );
+}
+
+function isSevensBot(value: unknown): value is SevensBot {  return (
     isRecord(value) &&
     typeof value.id === 'string' &&
     value.id.length > 0 &&
@@ -133,6 +143,7 @@ export function isSevensGameState(value: unknown): value is SevensGameState {
   const bots = Array.isArray(value.bots) ? value.bots : null;
   const latestScores = Array.isArray(value.latestScores) ? value.latestScores : null;
   const cumulativeScores = Array.isArray(value.cumulativeScores) ? value.cumulativeScores : null;
+  const moveLog = Array.isArray(value.moveLog) ? value.moveLog : null;
   const validPlayerId = (id: unknown) => typeof id === 'string' && playerIds.includes(id);
   const pendingDraw = value.pendingDraw;
   return (
@@ -171,7 +182,9 @@ export function isSevensGameState(value: unknown): value is SevensGameState {
     latestScores !== null &&
     latestScores.every(isSevensScore) &&
     cumulativeScores !== null &&
-    cumulativeScores.every(isSevensScore)
+    cumulativeScores.every(isSevensScore) &&
+    moveLog !== null &&
+    moveLog.every(isSevensMoveLogEntry)
   );
 }
 

@@ -2,13 +2,17 @@ import type { CreateGameOptions, Participant } from '@opengamesonline/expo-lan-m
 import {
   BotPlaystyle,
   GameStatus,
+  Suit,
   createFinalScores,
   initializeSevens,
   SevensVariant,
   TurnActionType,
   validateTurn,
+  type StandardCard,
   type TurnAction,
 } from '@opengamesonline/sevens';
+
+import { cardLabel } from '@/components/cards/card-text';
 
 import {
   MAX_SEVENS_PLAYERS,
@@ -19,10 +23,12 @@ import {
   type SevensGameEvent,
   type SevensGameState,
   type SevensLobbyMetadata,
+  type SevensMoveLogEntry,
   type SevensParticipantMetadata,
   type SevensParticipantRole,
   type SevensScore,
 } from './types';
+import { illegalMoveMessage } from './presentation';
 import {
   isSevensBotTurnEvent,
   isSevensParticipantMetadata,
@@ -83,6 +89,52 @@ function spectators(
       isSevensParticipantMetadata(participant.metadata) &&
       participant.metadata.role === 'spectator',
   );
+}
+
+const MAX_MOVE_LOG_ENTRIES = 50;
+
+const moveLogSuitOrder: readonly Suit[] = [
+  Suit.Spades,
+  Suit.Diamonds,
+  Suit.Clubs,
+  Suit.Hearts,
+];
+
+function boardAdditions(
+  prev: SevensGameState['board'],
+  next: SevensGameState['board'],
+): StandardCard[] {
+  const added: StandardCard[] = [];
+  for (const suit of moveLogSuitOrder) {
+    const prevBounds = prev[suit];
+    const nextBounds = next[suit];
+    if (nextBounds.min === null || nextBounds.max === null) continue;
+    for (let rank = nextBounds.min; rank <= nextBounds.max; rank += 1) {
+      if (
+        prevBounds.min === null ||
+        prevBounds.max === null ||
+        rank < prevBounds.min ||
+        rank > prevBounds.max
+      ) {
+        added.push({ suit, rank });
+      }
+    }
+  }
+  return added;
+}
+
+function appendMoveLog(
+  game: SevensGameState,
+  texts: readonly string[],
+): readonly SevensMoveLogEntry[] {
+  const base = game.moveLog;
+  return [
+    ...base,
+    ...texts.map((text, index) => ({
+      key: `${game.roundNumber}-${base.length + index}`,
+      text,
+    })),
+  ].slice(-MAX_MOVE_LOG_ENTRIES);
 }
 
 export function createSevensPolicy({
@@ -164,13 +216,15 @@ export function createSevensPolicy({
         ...humanPlayers.map(({ id, name }) => [id, name] as const),
         ...bots.map(({ id, name }) => [id, name] as const),
       ]);
+      const roundNumber = roundsPlayed + 1;
       return {
         ...initializeSevens(playerIds, policyVariant),
         lastIllegalMovePlayerId: null,
         bots: bots.map((bot) => ({ ...bot })),
-        roundNumber: roundsPlayed + 1,
+        roundNumber,
         latestScores: latestScores.map((score) => ({ ...score })),
         cumulativeScores: cumulativeScores.map((score) => ({ ...score })),
+        moveLog: [{ key: `${roundNumber}-0`, text: `Round ${roundNumber} dealt.` }],
       };
     },
     getLobbyMetadata(participants) {
@@ -247,6 +301,22 @@ export function createSevensPolicy({
 
       const nextGame = validateTurn(game, actorId, action);
       if (nextGame) {
+        const texts: string[] = [];
+        const nameOf = (playerId: string) => roundPlayerNames.get(playerId) ?? playerId;
+        if (!game.pendingDraw && nextGame.pendingDraw) {
+          texts.push(
+            `${nameOf(nextGame.pendingDraw.requesterId)} draws from ${nameOf(nextGame.pendingDraw.donorId)}.`,
+          );
+        }
+        const played = boardAdditions(game.board, nextGame.board);
+        if (played.length > 0) {
+          texts.push(`${nameOf(actorId)} played ${played.map(cardLabel).join(', ')}.`);
+        }
+        if (game.pendingDraw && !nextGame.pendingDraw) {
+          texts.push(
+            `${nameOf(game.pendingDraw.donorId)} gave a card to ${nameOf(game.pendingDraw.requesterId)}.`,
+          );
+        }
         if (game.status === GameStatus.Active && nextGame.status === GameStatus.Finished) {
           latestScores = createFinalScores(nextGame).map(({ playerId, score }) => ({
             playerId,
@@ -266,6 +336,13 @@ export function createSevensPolicy({
           });
           cumulativeScores = [...totals.values()];
           roundsPlayed += 1;
+          const winnerPoints = latestScores.find(
+            ({ playerId }) => playerId === nextGame.winnerId,
+          )?.points;
+          texts.push(
+            `${nameOf(nextGame.winnerId ?? '')} wins round ${game.roundNumber}` +
+              (winnerPoints !== undefined ? ` · ${winnerPoints} pts` : ''),
+          );
         }
 
         return {
@@ -275,12 +352,21 @@ export function createSevensPolicy({
           latestScores: latestScores.map((score) => ({ ...score })),
           cumulativeScores: cumulativeScores.map((score) => ({ ...score })),
           lastIllegalMovePlayerId: null,
+          moveLog: appendMoveLog(game, texts),
         };
       }
 
-      return game.status === GameStatus.Active && action.type === TurnActionType.Play
-        ? { ...game, lastIllegalMovePlayerId: actorId }
-        : game;
+      if (game.status === GameStatus.Active && action.type === TurnActionType.Play) {
+        if (game.lastIllegalMovePlayerId === actorId) return { ...game, lastIllegalMovePlayerId: actorId };
+        return {
+          ...game,
+          lastIllegalMovePlayerId: actorId,
+          moveLog: appendMoveLog(game, [
+            illegalMoveMessage(roundPlayerNames.get(actorId) ?? actorId),
+          ]),
+        };
+      }
+      return game;
     },
   };
 }
