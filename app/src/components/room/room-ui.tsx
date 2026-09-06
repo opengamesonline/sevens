@@ -2,13 +2,13 @@ import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
   type TextInputProps,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { GameColors } from '@/constants/theme';
@@ -20,12 +20,13 @@ export function RoomScreen({ children, scroll = true }: { children: ReactNode; s
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.feltGlow} />
       {scroll ? (
-        <ScrollView
+        <KeyboardAwareScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          bottomOffset={32}
         >
           {content}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       ) : (
         content
       )}

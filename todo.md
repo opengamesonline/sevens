@@ -7,7 +7,7 @@
 - [ ] Move history / log for the game
 - [ ] Show the playable cards even when it is not your turn
 - [ ] Fix confusing color overlap of the cards
-- [ ] Fix text box not visible when typing display name
+- [x] Fix text box not visible when typing display name
 - [ ] Fix some buttons requiring scrolling to be visible
 - [x] Keep the number of cards on each row from changing
 - [x] Keep the 7s row aligned on the board

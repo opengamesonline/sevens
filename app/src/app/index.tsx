@@ -2,15 +2,14 @@ import { Rank, SevensVariant, Suit } from '@opengamesonline/sevens';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
   Switch,
   Text,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PlayingCard } from '@/components/cards/playing-card';
@@ -159,11 +158,15 @@ export default function HomeScreen() {
         visible={showCreate}
         onRequestClose={() => setShowCreate(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalBackdrop}
-        >
+        <View style={styles.modalBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowCreate(false)} />
+          <KeyboardAwareScrollView
+            style={styles.modalSheet}
+            contentContainerStyle={styles.modalSheetContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bottomOffset={16}
+          >
           <View
             style={[
               styles.modalCard,
@@ -250,7 +253,8 @@ export default function HomeScreen() {
             />
             <RoomButton label="Cancel" disabled={busy} onPress={() => setShowCreate(false)} />
           </View>
-        </KeyboardAvoidingView>
+          </KeyboardAwareScrollView>
+        </View>
       </Modal>
     </RoomScreen>
   );
@@ -283,6 +287,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,18,14,0.74)',
   },
+  modalSheet: { width: '100%', maxHeight: '100%' },
+  modalSheetContent: { flexGrow: 1, justifyContent: 'flex-end' },
   modalCard: {
     width: '100%',
     maxWidth: 720,
