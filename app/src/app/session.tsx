@@ -1,4 +1,5 @@
 import { BotPlaystyle, SevensVariant } from '@opengamesonline/sevens';
+import type { Participant } from '@opengamesonline/expo-lan-multiplayer';
 import { router } from 'expo-router';
 import { useEffect, useEffectEvent, useState } from 'react';
 import { Alert, BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -14,6 +15,11 @@ import {
 } from '@/components/room/room-ui';
 import { GameColors } from '@/constants/theme';
 import { useSevensMultiplayer } from '@/features/multiplayer';
+import type {
+  SevensBot,
+  SevensParticipantMetadata,
+} from '@/features/multiplayer';
+import { sortByLobbyStandings } from '@/features/multiplayer/presentation';
 
 const botPlaystyles = [
   {
@@ -150,6 +156,29 @@ export default function SessionScreen() {
   );
   const showScores = Boolean(lobby && lobby.roundsPlayed > 0);
   const showBotActions = !disconnected && isHost;
+  const humanPlayers = snapshot.participants.filter(
+    ({ metadata }) => metadata.role === 'player',
+  );
+  const spectators = snapshot.participants.filter(
+    ({ metadata }) => metadata.role !== 'player',
+  );
+  const scoringRows = showScores
+    ? sortByLobbyStandings(
+        [...humanPlayers, ...(lobby?.bots ?? [])],
+        (row) => row.id,
+        latestPoints,
+        cumulativePoints,
+      )
+    : [...humanPlayers, ...(lobby?.bots ?? [])];
+  const sortedHistoricalScores = showScores
+    ? sortByLobbyStandings(
+        historicalScores,
+        (score) => score.playerId,
+        latestPoints,
+        cumulativePoints,
+      )
+    : historicalScores;
+  const session = snapshot;
 
   function scoreCells(playerId: string, eligible: boolean) {
     if (!showScores) return null;
@@ -161,6 +190,74 @@ export default function SessionScreen() {
         <Text style={styles.standingPoints}>
           {eligible ? cumulativePoints.get(playerId) ?? 0 : '—'}
         </Text>
+      </View>
+    );
+  }
+
+  function renderParticipantRow(participant: Participant<SevensParticipantMetadata>) {
+    const isSelf = participant.id === session.self?.id;
+    const isParticipantHost = participant.id === session.hostParticipantId;
+    const isPlayer = participant.metadata.role === 'player';
+    const isConnected = session.connectedParticipantIds.includes(participant.id);
+    const canRemove = showBotActions && !isConnected && !isSelf;
+    return (
+      <View key={participant.id} style={styles.participant}>
+        <View
+          style={[
+            styles.roleMark,
+            participant.metadata.role === 'spectator' && styles.spectatorMark,
+          ]}
+        >
+          <Text style={styles.roleMarkText}>
+            {isPlayer ? 'P' : 'S'}
+          </Text>
+        </View>
+        <View style={styles.participantCopy}>
+          <Text style={styles.participantName}>{participant.name}</Text>
+          <View style={styles.badges}>
+            {isParticipantHost ? <Text style={styles.badge}>HOST</Text> : null}
+            {isSelf ? <Text style={styles.badge}>YOU</Text> : null}
+            {!isConnected ? <Text style={styles.offlineBadge}>OFFLINE</Text> : null}
+          </View>
+        </View>
+        {scoreCells(participant.id, isPlayer)}
+        {canRemove ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy}
+            onPress={() => void removeDisconnectedParticipant(participant.id)}
+            style={styles.removeBot}
+          >
+            <Text style={styles.removeBotText}>REMOVE</Text>
+          </Pressable>
+        ) : showBotActions && showScores ? (
+          <View style={styles.rowActionSpace} />
+        ) : null}
+      </View>
+    );
+  }
+
+  function renderBotRow(bot: SevensBot) {
+    return (
+      <View key={bot.id} style={styles.participant}>
+        <View style={[styles.roleMark, styles.botMark]}>
+          <Text style={styles.roleMarkText}>B</Text>
+        </View>
+        <View style={styles.participantCopy}>
+          <Text style={styles.participantName}>{bot.name}</Text>
+          <Text style={styles.botPlaystyle}>{bot.playstyle.toUpperCase()} BOT</Text>
+        </View>
+        {scoreCells(bot.id, true)}
+        {showBotActions ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy}
+            onPress={() => void removeBot(bot.id)}
+            style={styles.removeBot}
+          >
+            <Text style={styles.removeBotText}>REMOVE</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
@@ -215,71 +312,11 @@ export default function SessionScreen() {
         ) : null}
 
         <View style={styles.participantList}>
-          {snapshot.participants.map((participant) => {
-            const isSelf = participant.id === snapshot.self?.id;
-            const isParticipantHost = participant.id === snapshot.hostParticipantId;
-            const isPlayer = participant.metadata.role === 'player';
-            const isConnected = snapshot.connectedParticipantIds.includes(participant.id);
-            const canRemove = showBotActions && !isConnected && !isSelf;
-            return (
-              <View key={participant.id} style={styles.participant}>
-                <View
-                  style={[
-                    styles.roleMark,
-                    participant.metadata.role === 'spectator' && styles.spectatorMark,
-                  ]}
-                >
-                  <Text style={styles.roleMarkText}>
-                    {isPlayer ? 'P' : 'S'}
-                  </Text>
-                </View>
-                <View style={styles.participantCopy}>
-                  <Text style={styles.participantName}>{participant.name}</Text>
-                  <View style={styles.badges}>
-                    {isParticipantHost ? <Text style={styles.badge}>HOST</Text> : null}
-                    {isSelf ? <Text style={styles.badge}>YOU</Text> : null}
-                    {!isConnected ? <Text style={styles.offlineBadge}>OFFLINE</Text> : null}
-                  </View>
-                </View>
-                {scoreCells(participant.id, isPlayer)}
-                {canRemove ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    disabled={busy}
-                    onPress={() => void removeDisconnectedParticipant(participant.id)}
-                    style={styles.removeBot}
-                  >
-                    <Text style={styles.removeBotText}>REMOVE</Text>
-                  </Pressable>
-                ) : showBotActions && showScores ? (
-                  <View style={styles.rowActionSpace} />
-                ) : null}
-              </View>
-            );
-          })}
-          {lobby?.bots.map((bot) => (
-            <View key={bot.id} style={styles.participant}>
-              <View style={[styles.roleMark, styles.botMark]}>
-                <Text style={styles.roleMarkText}>B</Text>
-              </View>
-              <View style={styles.participantCopy}>
-                <Text style={styles.participantName}>{bot.name}</Text>
-                <Text style={styles.botPlaystyle}>{bot.playstyle.toUpperCase()} BOT</Text>
-              </View>
-              {scoreCells(bot.id, true)}
-              {showBotActions ? (
-                <Pressable
-                  accessibilityRole="button"
-                  disabled={busy}
-                  onPress={() => void removeBot(bot.id)}
-                  style={styles.removeBot}
-                >
-                  <Text style={styles.removeBotText}>REMOVE</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          ))}
-          {historicalScores.map((score) => (
+          {scoringRows.map((row) =>
+            'playstyle' in row ? renderBotRow(row) : renderParticipantRow(row),
+          )}
+          {spectators.map((participant) => renderParticipantRow(participant))}
+          {sortedHistoricalScores.map((score) => (
             <View key={score.playerId} style={[styles.participant, styles.historicalParticipant]}>
               <View style={[styles.roleMark, styles.historicalMark]}>
                 <Text style={styles.roleMarkText}>P</Text>

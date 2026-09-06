@@ -11,5 +11,5 @@
 - [ ] Fix some buttons requiring scrolling to be visible
 - [ ] Keep the number of cards on each row from changing
 - [ ] Keep the 7s row aligned on the board
-- [ ] Lobby sorts by points
+- [x] Lobby sorts by points
 - [x] Fix: cannot play 8 of Hearts to force 8 of Spades with the Joker
