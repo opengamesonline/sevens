@@ -68,17 +68,12 @@ export function selectPlayableCards(
 ): readonly Card[] {
   const game = snapshot?.state;
   const hand = selectOwnHand(snapshot);
-  if (
-    !game ||
-    !hand ||
-    game.status !== GameStatus.Active ||
-    game.pendingDraw !== null ||
-    game.currentPlayerId !== snapshot?.self?.id
-  ) {
+  const selfId = snapshot?.self?.id;
+  if (!game || !hand || !selfId || game.status !== GameStatus.Active) {
     return [];
   }
   return getPlayableCards(game.board, hand, game.variant, {
-    playerId: snapshot.self.id,
+    playerId: selfId,
     players: game.players,
   });
 }

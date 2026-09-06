@@ -70,7 +70,7 @@ export function PlayingCard({
         pressed && selectable && styles.pressed,
       ]}
     >
-      {!playable && selectable && !placeholder ? (
+      {!playable && !placeholder ? (
         <View
           pointerEvents="none"
           style={[

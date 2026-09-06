@@ -175,6 +175,50 @@ test('Joker selector includes a bridge play held by another player', () => {
   assert.deepEqual(selectPlayableCards(jokerSnapshot), [tenOfHearts]);
 });
 
+test('playable-card hints stay visible when it is not your turn', () => {
+  const tenOfHearts = { suit: Suit.Hearts, rank: Rank.Ten } as const;
+  const cards = [
+    { suit: Suit.Spades, rank: Rank.Seven },
+    { suit: Suit.Spades, rank: Rank.Eight },
+    { suit: Suit.Spades, rank: Rank.Nine },
+    { suit: Suit.Spades, rank: Rank.Ten },
+    { suit: Suit.Hearts, rank: Rank.Seven },
+    { suit: Suit.Hearts, rank: Rank.Eight },
+  ] as const;
+  const board = cards.reduce(placeCard, createEmptyBoard());
+  const waitingSnapshot: SevensSessionSnapshot = {
+    ...snapshot(0),
+    state: {
+      ...game,
+      variant: SevensVariant.Joker,
+      board,
+      currentPlayerId: 'bob',
+      pendingDraw: null,
+      players: [
+        { id: 'alice', hand: [JOKER_CARD, tenOfHearts] },
+        { id: 'bob', hand: [{ suit: Suit.Hearts, rank: Rank.Nine }] },
+        { id: 'carol', hand: [{ suit: Suit.Clubs, rank: Rank.Two }] },
+      ],
+    },
+    lobbyMetadata: {
+      ...snapshot(0).lobbyMetadata!,
+      variant: SevensVariant.Joker,
+    },
+  };
+
+  assert.deepEqual(selectPlayableCards(waitingSnapshot), [tenOfHearts]);
+
+  const drawingSnapshot: SevensSessionSnapshot = {
+    ...waitingSnapshot,
+    state: {
+      ...waitingSnapshot.state!,
+      pendingDraw: { requesterId: 'bob', donorId: 'carol' },
+    },
+  };
+
+  assert.deepEqual(selectPlayableCards(drawingSnapshot), [tenOfHearts]);
+});
+
 test('results rank the winner first when a remaining Joker creates a zero-point tie', () => {
   const scores = [
     { playerId: 'bob', score: 0 },
