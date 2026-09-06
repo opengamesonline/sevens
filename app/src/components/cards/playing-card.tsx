@@ -67,10 +67,22 @@ export function PlayingCard({
         compact ? styles.compactCard : handSize ? styles.handCard : styles.fullCard,
         placeholder && styles.placeholder,
         selected && (compact || handSize ? styles.compactSelected : styles.selected),
-        !playable && selectable && styles.unplayable,
         pressed && selectable && styles.pressed,
       ]}
     >
+      {!playable && selectable && !placeholder ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.dimOverlay,
+            compact
+              ? styles.compactDimOverlay
+              : handSize
+                ? styles.handDimOverlay
+                : styles.fullDimOverlay,
+          ]}
+        />
+      ) : null}
       {isJokerCard(card) ? (
         <>
           <View style={[styles.jokerRail, compact && styles.compactJokerRail]}>
@@ -198,7 +210,17 @@ const styles = StyleSheet.create({
     shadowColor: GameColors.gold,
     shadowOpacity: 0.55,
   },
-  unplayable: { opacity: 0.54 },
+  dimOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(4,43,35,0.5)',
+  },
+  compactDimOverlay: { borderRadius: 6 },
+  handDimOverlay: { borderRadius: 10 },
+  fullDimOverlay: { borderRadius: 12 },
   placeholder: { opacity: 0.26, backgroundColor: 'transparent', borderStyle: 'dashed' },
   pressed: { transform: [{ translateY: -5 }] },
 });
