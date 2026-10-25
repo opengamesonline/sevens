@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "sevens",
+    "owner": "drasolabs",
+    "name": "Sevens",
     "slug": "sevens",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "sevens",
@@ -10,7 +11,7 @@
     "backgroundColor": "#0B6E4F",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.opengamesonline.sevens",
+      "bundleIdentifier": "com.drasolabs.sevens",
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Discover and connect to multiplayer games on your local network.",
         "NSBonjourServices": [
@@ -26,7 +27,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.opengamesonline.sevens"
+      "package": "com.drasolabs.sevens"
     },
     "web": {
       "output": "static",
@@ -46,6 +47,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "cf266b75-da16-4843-bea0-25bd563f9daa"
+      }
     }
   }
 }

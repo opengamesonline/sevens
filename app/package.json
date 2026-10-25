@@ -1,7 +1,7 @@
 {
   "name": "sevens",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "dependencies": {
     "@expo/ui": "~57.0.8",
     "@opengamesonline/expo-lan-multiplayer": "file:../submodules/expo-lan/expo-lan-multiplayer",
@@ -43,6 +43,7 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "eas-build-pre-install": "cd ../library && bun install --frozen-lockfile && bun run build",
     "start": "expo start --dev-client --lan",
     "bridge": "zsh scripts/emulator-bridge.zsh",
     "android": "expo run:android",

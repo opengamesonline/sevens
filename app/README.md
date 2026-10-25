@@ -1,5 +1,10 @@
 # Sevens App
 
+## iOS CI and deployment
+
+See [iOS deployment setup](../docs/ios-deployment.md) for GitHub secrets,
+required PR checks, and automatic EAS local builds/TestFlight uploads from `dev`.
+
 ## Development Client
 
 Initialize the local LAN package, build the Bun game library, then install the app dependencies:
