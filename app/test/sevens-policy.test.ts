@@ -27,6 +27,7 @@ import type {
   SevensParticipantMetadata,
 } from '../src/features/multiplayer/types';
 import {
+  isSevensGameState,
   isSevensLobbyMetadata,
   isTurnAction,
 } from '../src/features/multiplayer/validation';
@@ -74,6 +75,7 @@ test('initializes from finalized player roles and excludes a spectator host', ()
     role: 'spectator',
     maxPlayers: 4,
     showPlayableCards: false,
+    preventIllegalDraw: false,
   });
   const game = policy.createInitialState([host, alice, bob, carol]);
 
@@ -86,6 +88,9 @@ test('initializes from finalized player roles and excludes a spectator host', ()
   assert.equal(game.roundNumber, 1);
   assert.deepEqual(game.latestScores, []);
   assert.deepEqual(game.cumulativeScores, []);
+  assert.deepEqual(game.moveLog, [
+    { key: '1-0', text: 'Round 1 dealt.', kind: 'round', actorId: null, cards: [] },
+  ]);
 });
 
 test('computes role-aware lobby metadata and enforces lobby policy', () => {
@@ -95,13 +100,14 @@ test('computes role-aware lobby metadata and enforces lobby policy', () => {
     role: 'player',
     maxPlayers: 3,
     showPlayableCards: true,
+    preventIllegalDraw: false,
     variant: SevensVariant.Joker,
   });
   const participants = [alice, bob, carol, host];
 
   assert.deepEqual(lobbyMetadata(policy, participants), {
     appId: 'com.opengamesonline.sevens',
-    gameVersion: 3,
+    gameVersion: 4,
     playerCount: 3,
     spectatorCount: 1,
     minPlayers: 3,
@@ -111,6 +117,7 @@ test('computes role-aware lobby metadata and enforces lobby policy', () => {
     latestScores: [],
     cumulativeScores: [],
     showPlayableCards: true,
+    preventIllegalDraw: false,
     variant: SevensVariant.Joker,
   });
   const jokerGame = policy.createInitialState(participants);
@@ -152,6 +159,7 @@ test('adds strategy-configured bots to lobby capacity and the initialized roster
     role: 'player',
     maxPlayers: 3,
     showPlayableCards: false,
+    preventIllegalDraw: false,
   });
 
   const cautious = policy.addBot(BotPlaystyle.Cautious, [alice]);
@@ -192,6 +200,7 @@ test('only accepts bot actions attributed to the host', () => {
     role: 'spectator',
     maxPlayers: 3,
     showPlayableCards: false,
+    preventIllegalDraw: false,
   });
   const bot = {
     id: 'sevens-bot-1',
@@ -216,6 +225,7 @@ test('only accepts bot actions attributed to the host', () => {
     roundNumber: 1,
     latestScores: [],
     cumulativeScores: [],
+    moveLog: [],
   };
   const event = {
     type: SEVENS_BOT_TURN_EVENT,
@@ -243,6 +253,7 @@ test('applies a serialized Joker bridge play through the host policy', () => {
     role: 'player',
     maxPlayers: 3,
     showPlayableCards: false,
+    preventIllegalDraw: false,
     variant: SevensVariant.Joker,
   });
   const boardCards = [
@@ -279,6 +290,7 @@ test('applies a serialized Joker bridge play through the host policy', () => {
     roundNumber: 1,
     latestScores: [],
     cumulativeScores: [],
+    moveLog: [],
   };
   const serializedGame = JSON.parse(JSON.stringify(game)) as SevensGameState;
   const serializedAction = JSON.parse(
@@ -288,12 +300,26 @@ test('applies a serialized Joker bridge play through the host policy', () => {
     }),
   ) as TurnAction;
 
+  policy.createInitialState([alice, bob, carol]);
   const result = reduceEvent(policy, serializedGame, serializedAction, alice);
 
   assert.deepEqual(result.board[Suit.Hearts], { min: Rank.Seven, max: Rank.Ten });
   assert.equal(result.players[0]!.hand.length, 0);
   assert.equal(result.players[1]!.hand.some(isJokerCard), true);
   assert.equal(result.winnerId, alice.id);
+  assert.deepEqual(result.moveLog, [
+    {
+      key: '1-0',
+      text: 'Alice used the Joker to play 9♥, 10♥.',
+      kind: 'bridge',
+      actorId: 'alice',
+      cards: [
+        { suit: Suit.Hearts, rank: Rank.Nine },
+        { suit: Suit.Hearts, rank: Rank.Ten },
+      ],
+    },
+    { key: '1-1', text: 'Alice wins round 1 · 0 pts', kind: 'win', actorId: 'alice', cards: [] },
+  ]);
 });
 
 test('persists latest and cumulative scores across rounds', () => {
@@ -303,6 +329,7 @@ test('persists latest and cumulative scores across rounds', () => {
     role: 'player',
     maxPlayers: 3,
     showPlayableCards: false,
+    preventIllegalDraw: false,
   });
   const participants = [alice, bob, carol];
   const openingCard = { suit: Suit.Spades, rank: Rank.Seven } as const;
@@ -325,6 +352,18 @@ test('persists latest and cumulative scores across rounds', () => {
   );
 
   assert.equal(firstResult.status, GameStatus.Finished);
+  assert.equal(isSevensGameState(JSON.parse(JSON.stringify(firstResult))), true);
+  assert.deepEqual(firstResult.moveLog, [
+    { key: '1-0', text: 'Round 1 dealt.', kind: 'round', actorId: null, cards: [] },
+    {
+      key: '1-1',
+      text: 'Alice played 7♠.',
+      kind: 'play',
+      actorId: 'alice',
+      cards: [{ suit: Suit.Spades, rank: Rank.Seven }],
+    },
+    { key: '1-2', text: 'Alice wins round 1 · 0 pts', kind: 'win', actorId: 'alice', cards: [] },
+  ]);
   assert.deepEqual(firstResult.latestScores, [
     { playerId: alice.id, playerName: alice.name, points: 0 },
     { playerId: bob.id, playerName: bob.name, points: 15 },
@@ -335,6 +374,9 @@ test('persists latest and cumulative scores across rounds', () => {
 
   const secondInitial = policy.createInitialState(participants);
   assert.equal(secondInitial.roundNumber, 2);
+  assert.deepEqual(secondInitial.moveLog, [
+    { key: '2-0', text: 'Round 2 dealt.', kind: 'round', actorId: null, cards: [] },
+  ]);
   assert.deepEqual(secondInitial.latestScores, firstResult.latestScores);
   const secondRound: SevensGameState = {
     ...secondInitial,
@@ -379,6 +421,77 @@ test('persists latest and cumulative scores across rounds', () => {
   assert.equal(lobbyMetadata(policy, participants).roundsPlayed, 2);
 });
 
+test('rejects illegal draws when the table locks them', () => {
+  const locked = createSevensPolicy({
+    gameName: 'Locked Table',
+    participantName: alice.name,
+    role: 'player',
+    maxPlayers: 3,
+    showPlayableCards: false,
+    preventIllegalDraw: true,
+  });
+  const free = createSevensPolicy({
+    gameName: 'Free Table',
+    participantName: alice.name,
+    role: 'player',
+    maxPlayers: 3,
+    showPlayableCards: false,
+    preventIllegalDraw: false,
+  });
+  const participants = [alice, bob, carol];
+  const base = locked.createInitialState(participants);
+  free.createInitialState(participants);
+  const game: SevensGameState = {
+    ...base,
+    board: placeCard(createEmptyBoard(), { suit: Suit.Spades, rank: Rank.Seven }),
+    players: [
+      { id: alice.id, hand: [{ suit: Suit.Spades, rank: Rank.Eight }] },
+      { id: bob.id, hand: [{ suit: Suit.Hearts, rank: Rank.Eight }] },
+      { id: carol.id, hand: [{ suit: Suit.Diamonds, rank: Rank.Seven }] },
+    ],
+    currentPlayerId: bob.id,
+    pendingDraw: null,
+  };
+
+  const allowed = reduceEvent(
+    locked,
+    game,
+    { type: TurnActionType.RequestDraw },
+    bob,
+  );
+  assert.deepEqual(allowed.pendingDraw, { requesterId: bob.id, donorId: alice.id });
+  assert.equal(
+    allowed.moveLog[allowed.moveLog.length - 1]!.text,
+    'Bob draws from Alice.',
+  );
+
+  const blocked = reduceEvent(
+    locked,
+    { ...game, currentPlayerId: alice.id },
+    { type: TurnActionType.RequestDraw },
+    alice,
+  );
+  assert.equal(blocked.pendingDraw, null);
+  assert.equal(blocked.lastIllegalMovePlayerId, alice.id);
+  assert.equal(
+    blocked.moveLog[blocked.moveLog.length - 1]!.text,
+    'Alice tried to play an illegal move.',
+  );
+
+  const permitted = reduceEvent(
+    free,
+    { ...game, currentPlayerId: alice.id, moveLog: [] },
+    { type: TurnActionType.RequestDraw },
+    alice,
+  );
+  assert.deepEqual(permitted.pendingDraw, { requesterId: alice.id, donorId: carol.id });
+
+  assert.equal(
+    isSevensLobbyMetadata({ ...lobbyMetadata(locked, participants), preventIllegalDraw: 'yes' }),
+    false,
+  );
+});
+
 test('uses connection-bound actors for the two-step draw flow', () => {
   const policy = createSevensPolicy({
     gameName: 'Table',
@@ -386,6 +499,7 @@ test('uses connection-bound actors for the two-step draw flow', () => {
     role: 'player',
     maxPlayers: 3,
     showPlayableCards: false,
+    preventIllegalDraw: false,
   });
   const participants = [alice, bob, carol];
   const game = policy.createInitialState(participants);
@@ -408,6 +522,24 @@ test('uses connection-bound actors for the two-step draw flow', () => {
   assert.equal(illegalAttempt.currentPlayerId, game.currentPlayerId);
   assert.deepEqual(illegalAttempt.board, game.board);
   assert.deepEqual(illegalAttempt.players, game.players);
+  assert.deepEqual(illegalAttempt.moveLog, [
+    { key: '1-0', text: 'Round 1 dealt.', kind: 'round', actorId: null, cards: [] },
+    {
+      key: '1-1',
+      text: `${requester.name} tried to play an illegal move.`,
+      kind: 'illegal',
+      actorId: requester.id,
+      cards: [],
+    },
+  ]);
+
+  const repeatIllegal = reduceEvent(
+    policy,
+    illegalAttempt,
+    { type: TurnActionType.Play, card: illegalOpeningCard },
+    requester,
+  );
+  assert.deepEqual(repeatIllegal.moveLog, illegalAttempt.moveLog);
 
   const pending = reduceEvent(
     policy,
@@ -420,6 +552,10 @@ test('uses connection-bound actors for the two-step draw flow', () => {
     donorId: donor.id,
   });
   assert.equal(pending.lastIllegalMovePlayerId, null);
+  assert.deepEqual(
+    pending.moveLog.map(({ text }) => text),
+    ['Round 1 dealt.', `${requester.name} tried to play an illegal move.`, `${requester.name} draws from ${donor.name}.`],
+  );
 
   const donorCard = pending.players.find(({ id }) => id === donor.id)!.hand[0]!;
   const completed = reduceEvent(
@@ -432,6 +568,10 @@ test('uses connection-bound actors for the two-step draw flow', () => {
   assert.equal(
     completed.players.find(({ id }) => id === requester.id)!.hand.length,
     game.players.find(({ id }) => id === requester.id)!.hand.length + 1,
+  );
+  assert.equal(
+    completed.moveLog[completed.moveLog.length - 1]!.text,
+    `${donor.name} gave a card to ${requester.name}.`,
   );
 
   const spectatorAttempt = reduceEvent(

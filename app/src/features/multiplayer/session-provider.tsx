@@ -42,6 +42,7 @@ import {
   isSevensLobbyMetadata,
   isSevensParticipantMetadata,
 } from './validation';
+import { selectMissingLeaverId } from './selectors';
 
 export type JoinSevensGameOptions = {
   game: SevensDiscoveredGame;
@@ -192,6 +193,7 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
   const startingGameRef = useRef(false);
   const recoveryInFlightRef = useRef(false);
   const persistenceQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const endingTableRef = useRef(false);
   const appStateRef = useRef(AppState.currentState);
   const mountedRef = useRef(false);
   const [games, setGames] = useState<SevensDiscoveredGame[]>([]);
@@ -281,6 +283,7 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
       role: self.metadata.role,
       maxPlayers: recovery.lobbyMetadata.maxPlayers,
       showPlayableCards: recovery.lobbyMetadata.showPlayableCards,
+      preventIllegalDraw: recovery.lobbyMetadata.preventIllegalDraw,
       variant: recovery.lobbyMetadata.variant,
       recovery: {
         lobbyMetadata: recovery.lobbyMetadata,
@@ -338,6 +341,7 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
           ?? 'player',
         maxPlayers: saved.recovery.lobbyMetadata.maxPlayers,
         showPlayableCards: saved.recovery.lobbyMetadata.showPlayableCards,
+        preventIllegalDraw: saved.recovery.lobbyMetadata.preventIllegalDraw,
         variant: saved.recovery.lobbyMetadata.variant,
         recovery: {
           lobbyMetadata: saved.recovery.lobbyMetadata,
@@ -416,6 +420,7 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
     sessionRef.current = session;
     botTurnInFlightRef.current = false;
     handledBotRevisionRef.current = null;
+    endingTableRef.current = false;
     unsubscribeSessionRef.current = session.subscribe((nextSnapshot) => {
       if (!mountedRef.current || sessionRef.current !== session) return;
       setSnapshot(nextSnapshot);
@@ -424,6 +429,28 @@ export function SevensMultiplayerProvider({ children }: { children: ReactNode })
         clearPersistedSession();
       } else {
         persistSession(session);
+      }
+      if (
+        nextSnapshot.role === 'host' &&
+        nextSnapshot.status === 'connected' &&
+        !endingTableRef.current &&
+        selectMissingLeaverId(nextSnapshot)
+      ) {
+        endingTableRef.current = true;
+        void leave().catch(() => {
+          endingTableRef.current = false;
+        });
+      }
+      if (
+        nextSnapshot.role === 'host' &&
+        nextSnapshot.status === 'connected' &&
+        !endingTableRef.current &&
+        selectMissingLeaverId(nextSnapshot)
+      ) {
+        endingTableRef.current = true;
+        void leave().catch(() => {
+          endingTableRef.current = false;
+        });
       }
       if (
         nextSnapshot.status === 'disconnected' &&

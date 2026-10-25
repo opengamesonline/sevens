@@ -7,13 +7,14 @@ import type {
 } from '@opengamesonline/expo-lan-multiplayer';
 import type {
   BotPlaystyle,
+  Card,
   SevensGameObject,
   SevensVariant,
   TurnAction,
 } from '@opengamesonline/sevens';
 
 export const SEVENS_APP_ID = 'com.opengamesonline.sevens' as const;
-export const SEVENS_GAME_VERSION = 3 as const;
+export const SEVENS_GAME_VERSION = 4 as const;
 export const MIN_SEVENS_PLAYERS = 3 as const;
 export const MAX_SEVENS_PLAYERS = 7 as const;
 
@@ -41,12 +42,23 @@ export type SevensScore = {
   points: number;
 };
 
+export type SevensMoveLogKind = 'round' | 'play' | 'bridge' | 'draw' | 'give' | 'illegal' | 'win';
+
+export type SevensMoveLogEntry = {
+  key: string;
+  text: string;
+  kind: SevensMoveLogKind;
+  actorId: string | null;
+  cards: readonly Card[];
+};
+
 export type SevensGameState = SevensGameObject & {
   readonly lastIllegalMovePlayerId: string | null;
   readonly bots: readonly SevensBot[];
   readonly roundNumber: number;
   readonly latestScores: readonly SevensScore[];
   readonly cumulativeScores: readonly SevensScore[];
+  readonly moveLog: readonly SevensMoveLogEntry[];
 };
 
 export type SevensParticipantMetadata = {
@@ -67,6 +79,7 @@ export type SevensLobbyMetadata = {
   latestScores: SevensScore[];
   cumulativeScores: SevensScore[];
   showPlayableCards: boolean;
+  preventIllegalDraw: boolean;
   variant: SevensVariant;
 };
 

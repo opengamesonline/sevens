@@ -2,13 +2,19 @@ import type { CreateGameOptions, Participant } from '@opengamesonline/expo-lan-m
 import {
   BotPlaystyle,
   GameStatus,
+  Suit,
   createFinalScores,
+  getPlayableCards,
   initializeSevens,
   SevensVariant,
   TurnActionType,
   validateTurn,
+  type Card,
+  type StandardCard,
   type TurnAction,
 } from '@opengamesonline/sevens';
+
+import { cardLabel } from '@/components/cards/card-text';
 
 import {
   MAX_SEVENS_PLAYERS,
@@ -19,10 +25,13 @@ import {
   type SevensGameEvent,
   type SevensGameState,
   type SevensLobbyMetadata,
+  type SevensMoveLogEntry,
+  type SevensMoveLogKind,
   type SevensParticipantMetadata,
   type SevensParticipantRole,
   type SevensScore,
 } from './types';
+import { illegalMoveMessage } from './presentation';
 import {
   isSevensBotTurnEvent,
   isSevensParticipantMetadata,
@@ -35,6 +44,7 @@ export type CreateSevensPolicyOptions = {
   role: SevensParticipantRole;
   maxPlayers: number;
   showPlayableCards: boolean;
+  preventIllegalDraw: boolean;
   variant?: SevensVariant;
   recovery?: {
     lobbyMetadata: SevensLobbyMetadata;
@@ -85,18 +95,71 @@ function spectators(
   );
 }
 
+const MAX_MOVE_LOG_ENTRIES = 50;
+
+const moveLogSuitOrder: readonly Suit[] = [
+  Suit.Spades,
+  Suit.Diamonds,
+  Suit.Clubs,
+  Suit.Hearts,
+];
+
+function boardAdditions(
+  prev: SevensGameState['board'],
+  next: SevensGameState['board'],
+): StandardCard[] {
+  const added: StandardCard[] = [];
+  for (const suit of moveLogSuitOrder) {
+    const prevBounds = prev[suit];
+    const nextBounds = next[suit];
+    if (nextBounds.min === null || nextBounds.max === null) continue;
+    for (let rank = nextBounds.min; rank <= nextBounds.max; rank += 1) {
+      if (
+        prevBounds.min === null ||
+        prevBounds.max === null ||
+        rank < prevBounds.min ||
+        rank > prevBounds.max
+      ) {
+        added.push({ suit, rank });
+      }
+    }
+  }
+  return added;
+}
+
+function appendMoveLog(
+  game: SevensGameState,
+  drafts: readonly {
+    text: string;
+    kind: SevensMoveLogKind;
+    actorId: string | null;
+    cards: readonly Card[];
+  }[],
+): readonly SevensMoveLogEntry[] {
+  const base = game.moveLog;
+  return [
+    ...base,
+    ...drafts.map((draft, index) => ({
+      key: `${game.roundNumber}-${base.length + index}`,
+      ...draft,
+    })),
+  ].slice(-MAX_MOVE_LOG_ENTRIES);
+}
+
 export function createSevensPolicy({
   gameName,
   participantName,
   role,
   maxPlayers,
   showPlayableCards,
+  preventIllegalDraw,
   variant = SevensVariant.Standard,
   recovery,
 }: CreateSevensPolicyOptions): SevensPolicy {
   const restoredLobby = recovery?.lobbyMetadata;
   const policyMaxPlayers = restoredLobby?.maxPlayers ?? maxPlayers;
   const policyShowPlayableCards = restoredLobby?.showPlayableCards ?? showPlayableCards;
+  const policyPreventIllegalDraw = restoredLobby?.preventIllegalDraw ?? preventIllegalDraw;
   const policyVariant = restoredLobby?.variant ?? variant;
   if (
     !Number.isInteger(policyMaxPlayers) ||
@@ -123,6 +186,24 @@ export function createSevensPolicy({
     ...(recovery?.participants.map(({ id, name }) => [id, name] as const) ?? []),
     ...bots.map(({ id, name }) => [id, name] as const),
   ]);
+
+  function flagIllegalMove(target: SevensGameState, offenderId: string): SevensGameState {
+    if (target.lastIllegalMovePlayerId === offenderId) {
+      return { ...target, lastIllegalMovePlayerId: offenderId };
+    }
+    return {
+      ...target,
+      lastIllegalMovePlayerId: offenderId,
+      moveLog: appendMoveLog(target, [
+        {
+          text: illegalMoveMessage(roundPlayerNames.get(offenderId) ?? offenderId),
+          kind: 'illegal',
+          actorId: offenderId,
+          cards: [],
+        },
+      ]),
+    };
+  }
 
   return {
     name: gameName,
@@ -164,13 +245,23 @@ export function createSevensPolicy({
         ...humanPlayers.map(({ id, name }) => [id, name] as const),
         ...bots.map(({ id, name }) => [id, name] as const),
       ]);
+      const roundNumber = roundsPlayed + 1;
       return {
         ...initializeSevens(playerIds, policyVariant),
         lastIllegalMovePlayerId: null,
         bots: bots.map((bot) => ({ ...bot })),
-        roundNumber: roundsPlayed + 1,
+        roundNumber,
         latestScores: latestScores.map((score) => ({ ...score })),
         cumulativeScores: cumulativeScores.map((score) => ({ ...score })),
+        moveLog: [
+          {
+            key: `${roundNumber}-0`,
+            text: `Round ${roundNumber} dealt.`,
+            kind: 'round',
+            actorId: null,
+            cards: [],
+          },
+        ],
       };
     },
     getLobbyMetadata(participants) {
@@ -186,6 +277,7 @@ export function createSevensPolicy({
         latestScores: latestScores.map((score) => ({ ...score })),
         cumulativeScores: cumulativeScores.map((score) => ({ ...score })),
         showPlayableCards: policyShowPlayableCards,
+        preventIllegalDraw: policyPreventIllegalDraw,
         variant: policyVariant,
       };
     },
@@ -246,7 +338,65 @@ export function createSevensPolicy({
       }
 
       const nextGame = validateTurn(game, actorId, action);
-      if (nextGame) {
+      if (!nextGame) {
+        if (game.status === GameStatus.Active && action.type === TurnActionType.Play) {
+          return flagIllegalMove(game, actorId);
+        }
+        return game;
+      }
+      if (
+        policyPreventIllegalDraw &&
+        action.type === TurnActionType.RequestDraw &&
+        game.pendingDraw === null &&
+        actorId === game.currentPlayerId
+      ) {
+        const actor = game.players.find(({ id }) => id === actorId);
+        const playable = actor
+          ? getPlayableCards(game.board, actor.hand, game.variant, {
+              playerId: actorId,
+              players: game.players,
+            })
+          : [];
+        if (playable.length > 0) {
+          return flagIllegalMove(game, actorId);
+        }
+      }
+        const drafts: {
+          text: string;
+          kind: SevensMoveLogKind;
+          actorId: string | null;
+          cards: readonly Card[];
+        }[] = [];
+        const nameOf = (playerId: string) => roundPlayerNames.get(playerId) ?? playerId;
+        if (!game.pendingDraw && nextGame.pendingDraw) {
+          drafts.push({
+            text: `${nameOf(nextGame.pendingDraw.requesterId)} draws from ${nameOf(nextGame.pendingDraw.donorId)}.`,
+            kind: 'draw',
+            actorId: nextGame.pendingDraw.requesterId,
+            cards: [],
+          });
+        }
+        const played = boardAdditions(game.board, nextGame.board);
+        if (played.length > 0) {
+          // Standard plays place exactly one card, so multi-card plays are Joker bridges.
+          const bridged = played.length > 1;
+          drafts.push({
+            text: bridged
+              ? `${nameOf(actorId)} used the Joker to play ${played.map(cardLabel).join(', ')}.`
+              : `${nameOf(actorId)} played ${played.map(cardLabel).join(', ')}.`,
+            kind: bridged ? 'bridge' : 'play',
+            actorId,
+            cards: played,
+          });
+        }
+        if (game.pendingDraw && !nextGame.pendingDraw) {
+          drafts.push({
+            text: `${nameOf(game.pendingDraw.donorId)} gave a card to ${nameOf(game.pendingDraw.requesterId)}.`,
+            kind: 'give',
+            actorId: game.pendingDraw.donorId,
+            cards: [],
+          });
+        }
         if (game.status === GameStatus.Active && nextGame.status === GameStatus.Finished) {
           latestScores = createFinalScores(nextGame).map(({ playerId, score }) => ({
             playerId,
@@ -266,6 +416,17 @@ export function createSevensPolicy({
           });
           cumulativeScores = [...totals.values()];
           roundsPlayed += 1;
+          const winnerPoints = latestScores.find(
+            ({ playerId }) => playerId === nextGame.winnerId,
+          )?.points;
+          drafts.push({
+            text:
+              `${nameOf(nextGame.winnerId ?? '')} wins round ${game.roundNumber}` +
+              (winnerPoints !== undefined ? ` · ${winnerPoints} pts` : ''),
+            kind: 'win',
+            actorId: nextGame.winnerId,
+            cards: [],
+          });
         }
 
         return {
@@ -275,12 +436,8 @@ export function createSevensPolicy({
           latestScores: latestScores.map((score) => ({ ...score })),
           cumulativeScores: cumulativeScores.map((score) => ({ ...score })),
           lastIllegalMovePlayerId: null,
+          moveLog: appendMoveLog(game, drafts),
         };
-      }
-
-      return game.status === GameStatus.Active && action.type === TurnActionType.Play
-        ? { ...game, lastIllegalMovePlayerId: actorId }
-        : game;
     },
   };
 }

@@ -4,6 +4,7 @@ import test from 'node:test';
 import type { Participant } from '@opengamesonline/expo-lan-multiplayer';
 import {
   BotPlaystyle,
+  GameStatus,
   JOKER_CARD,
   Rank,
   SevensVariant,
@@ -14,6 +15,8 @@ import {
 } from '@opengamesonline/sevens';
 
 import {
+  selectHostSuccessor,
+  selectMissingLeaverId,
   selectOpponents,
   selectOwnHand,
   selectPlayableCards,
@@ -48,6 +51,7 @@ const game = {
   roundNumber: 1,
   latestScores: [],
   cumulativeScores: [],
+  moveLog: [],
 };
 
 function snapshot(selfIndex: number): SevensSessionSnapshot {
@@ -61,7 +65,7 @@ function snapshot(selfIndex: number): SevensSessionSnapshot {
     participants,
     lobbyMetadata: {
       appId: 'com.opengamesonline.sevens',
-      gameVersion: 3,
+      gameVersion: 4,
       playerCount: 3,
       spectatorCount: 1,
       minPlayers: 3,
@@ -71,6 +75,7 @@ function snapshot(selfIndex: number): SevensSessionSnapshot {
       latestScores: [],
       cumulativeScores: [],
       showPlayableCards: false,
+      preventIllegalDraw: false,
       variant: SevensVariant.Standard,
     },
     error: null,
@@ -175,6 +180,50 @@ test('Joker selector includes a bridge play held by another player', () => {
   assert.deepEqual(selectPlayableCards(jokerSnapshot), [tenOfHearts]);
 });
 
+test('playable-card hints stay visible when it is not your turn', () => {
+  const tenOfHearts = { suit: Suit.Hearts, rank: Rank.Ten } as const;
+  const cards = [
+    { suit: Suit.Spades, rank: Rank.Seven },
+    { suit: Suit.Spades, rank: Rank.Eight },
+    { suit: Suit.Spades, rank: Rank.Nine },
+    { suit: Suit.Spades, rank: Rank.Ten },
+    { suit: Suit.Hearts, rank: Rank.Seven },
+    { suit: Suit.Hearts, rank: Rank.Eight },
+  ] as const;
+  const board = cards.reduce(placeCard, createEmptyBoard());
+  const waitingSnapshot: SevensSessionSnapshot = {
+    ...snapshot(0),
+    state: {
+      ...game,
+      variant: SevensVariant.Joker,
+      board,
+      currentPlayerId: 'bob',
+      pendingDraw: null,
+      players: [
+        { id: 'alice', hand: [JOKER_CARD, tenOfHearts] },
+        { id: 'bob', hand: [{ suit: Suit.Hearts, rank: Rank.Nine }] },
+        { id: 'carol', hand: [{ suit: Suit.Clubs, rank: Rank.Two }] },
+      ],
+    },
+    lobbyMetadata: {
+      ...snapshot(0).lobbyMetadata!,
+      variant: SevensVariant.Joker,
+    },
+  };
+
+  assert.deepEqual(selectPlayableCards(waitingSnapshot), [tenOfHearts]);
+
+  const drawingSnapshot: SevensSessionSnapshot = {
+    ...waitingSnapshot,
+    state: {
+      ...waitingSnapshot.state!,
+      pendingDraw: { requesterId: 'bob', donorId: 'carol' },
+    },
+  };
+
+  assert.deepEqual(selectPlayableCards(drawingSnapshot), [tenOfHearts]);
+});
+
 test('results rank the winner first when a remaining Joker creates a zero-point tie', () => {
   const scores = [
     { playerId: 'bob', score: 0 },
@@ -187,4 +236,73 @@ test('results rank the winner first when a remaining Joker creates a zero-point 
     { playerId: 'bob', score: 0 },
     { playerId: 'carol', score: 10 },
   ]);
+});
+
+test('opponents show a label instead of a session id for departed players', () => {
+  const departedSnapshot: SevensSessionSnapshot = {
+    ...snapshot(0),
+    participants: participants.filter(({ id }) => id !== 'carol'),
+    connectedParticipantIds: ['alice', 'bob', 'watcher'],
+  };
+
+  assert.deepEqual(
+    selectOpponents(departedSnapshot).map(({ name }) => name),
+    ['Bob', 'Left table'],
+  );
+});
+
+test('missing leaver is reported only for departed roster players mid-game', () => {
+  assert.equal(selectMissingLeaverId(snapshot(0)), null);
+
+  const departed = {
+    ...snapshot(0),
+    participants: participants.filter(({ id }) => id !== 'carol'),
+  };
+  assert.equal(selectMissingLeaverId(departed), 'carol');
+
+  const disconnected = {
+    ...snapshot(0),
+    connectedParticipantIds: ['alice', 'bob', 'watcher'],
+  };
+  assert.equal(selectMissingLeaverId(disconnected), null);
+
+  const finished = {
+    ...departed,
+    state: { ...departed.state!, status: GameStatus.Finished },
+  };
+  assert.equal(selectMissingLeaverId(finished), null);
+
+  const withBot = {
+    ...snapshot(0),
+    state: {
+      ...game,
+      players: [game.players[0]!, game.players[1]!, { id: 'sevens-bot-1', hand: [] }],
+      bots: [{ id: 'sevens-bot-1', name: 'Bot 1', playstyle: BotPlaystyle.Cautious }],
+    },
+  };
+  assert.equal(selectMissingLeaverId(withBot), null);
+  assert.equal(selectMissingLeaverId(null), null);
+});
+
+test('host successor follows rotation order after the current host', () => {
+  assert.deepEqual(selectHostSuccessor(snapshot(0)), { id: 'bob', name: 'Bob' });
+
+  const skipped = {
+    ...snapshot(0),
+    connectedParticipantIds: ['alice', 'carol', 'watcher'],
+  };
+  assert.deepEqual(selectHostSuccessor(skipped), { id: 'carol', name: 'Carol' });
+
+  const wrapped = {
+    ...snapshot(0),
+    hostParticipantId: 'watcher',
+  };
+  assert.deepEqual(selectHostSuccessor(wrapped), { id: 'alice', name: 'Alice' });
+
+  const alone = {
+    ...snapshot(0),
+    connectedParticipantIds: ['alice'],
+  };
+  assert.equal(selectHostSuccessor(alone), null);
+  assert.equal(selectHostSuccessor(null), null);
 });

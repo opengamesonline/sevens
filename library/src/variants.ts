@@ -3,6 +3,7 @@ import { JOKER_CARD, cardEquals, createDeck, isJokerCard } from "./cards.js";
 import {
   Rank,
   SevensVariant,
+  Suit,
   type BoardState,
   type Card,
   type PlayResolution,
@@ -69,6 +70,39 @@ function findAssistedMove(
     }
 
     const bridge: StandardCard = { suit: selected.suit, rank };
+    if (
+      hand.some((card) => cardEquals(card, bridge)) ||
+      !isStandardPlayable(board, bridge) ||
+      !isStandardPlayable(placeCard(board, bridge), selected)
+    ) {
+      continue;
+    }
+
+    const holder = players.find(
+      (player) =>
+        player.id !== actorId && player.hand.some((card) => cardEquals(card, bridge)),
+    );
+    if (holder !== undefined) {
+      return { bridge, holderId: holder.id };
+    }
+  }
+
+  return findSpadeGateBridge(board, actorId, hand, players, selected);
+}
+
+function findSpadeGateBridge(
+  board: BoardState,
+  actorId: string,
+  hand: readonly Card[],
+  players: readonly PlayerState[],
+  selected: StandardCard,
+): AssistedMove | null {
+  if (selected.suit === Suit.Spades) {
+    return null;
+  }
+
+  for (let rank = Rank.Ace; rank <= Rank.King; rank += 1) {
+    const bridge: StandardCard = { suit: Suit.Spades, rank };
     if (
       hand.some((card) => cardEquals(card, bridge)) ||
       !isStandardPlayable(board, bridge) ||

@@ -180,6 +180,129 @@ describe("Joker plays", () => {
     expect(result?.players[1]?.hand).toEqual([card(Suit.Clubs, Rank.Two), JOKER_CARD]);
   });
 
+  test("forces out the spade gate with the Joker (8H forces 8S)", () => {
+    const extraCard = card(Suit.Clubs, Rank.Ace);
+    const game = jokerGame({
+      board: placeCards([
+        card(Suit.Spades, Rank.Seven),
+        card(Suit.Hearts, Rank.Seven),
+      ]),
+      players: [
+        { id: "alice", hand: [JOKER_CARD, card(Suit.Hearts, Rank.Eight), extraCard] },
+        { id: "bob", hand: [card(Suit.Spades, Rank.Eight), card(Suit.Clubs, Rank.Two)] },
+        { id: "carol", hand: [card(Suit.Diamonds, Rank.Seven)] },
+      ],
+    });
+    const snapshot = structuredClone(game);
+    const context = { playerId: "alice", players: game.players };
+
+    expect(
+      getPlayableCards(game.board, game.players[0]!.hand, game.variant, context),
+    ).toContainEqual(card(Suit.Hearts, Rank.Eight));
+    const result = validateTurn(game, "alice", {
+      type: TurnActionType.Play,
+      card: card(Suit.Hearts, Rank.Eight),
+    });
+
+    expect(game).toEqual(snapshot);
+    expect(result?.board[Suit.Spades]).toEqual({ min: Rank.Seven, max: Rank.Eight });
+    expect(result?.board[Suit.Hearts]).toEqual({ min: Rank.Seven, max: Rank.Eight });
+    expect(result?.players[0]?.hand).toEqual([extraCard]);
+    expect(result?.players[1]?.hand).toEqual([card(Suit.Clubs, Rank.Two), JOKER_CARD]);
+    expect(result?.currentPlayerId).toBe("bob");
+    expect(result?.status).toBe(GameStatus.Active);
+  });
+
+  test("forces out a downward spade gate with the Joker (6H forces 6S)", () => {
+    const extraCard = card(Suit.Clubs, Rank.Ace);
+    const game = jokerGame({
+      board: placeCards([
+        card(Suit.Spades, Rank.Seven),
+        card(Suit.Hearts, Rank.Seven),
+      ]),
+      players: [
+        { id: "alice", hand: [JOKER_CARD, card(Suit.Hearts, Rank.Six), extraCard] },
+        { id: "bob", hand: [card(Suit.Spades, Rank.Six), card(Suit.Clubs, Rank.Two)] },
+        { id: "carol", hand: [card(Suit.Diamonds, Rank.Seven)] },
+      ],
+    });
+    const context = { playerId: "alice", players: game.players };
+
+    expect(
+      getPlayableCards(game.board, game.players[0]!.hand, game.variant, context),
+    ).toContainEqual(card(Suit.Hearts, Rank.Six));
+    const result = validateTurn(game, "alice", {
+      type: TurnActionType.Play,
+      card: card(Suit.Hearts, Rank.Six),
+    });
+
+    expect(result?.board[Suit.Spades]).toEqual({ min: Rank.Six, max: Rank.Seven });
+    expect(result?.board[Suit.Hearts]).toEqual({ min: Rank.Six, max: Rank.Seven });
+    expect(result?.players[0]?.hand).toEqual([extraCard]);
+    expect(result?.players[1]?.hand).toEqual([card(Suit.Clubs, Rank.Two), JOKER_CARD]);
+    expect(result?.currentPlayerId).toBe("bob");
+    expect(result?.status).toBe(GameStatus.Active);
+  });
+
+  test("rejects a spade gate two steps away with a single Joker", () => {
+    const game = jokerGame({
+      board: placeCards([
+        card(Suit.Spades, Rank.Seven),
+        card(Suit.Hearts, Rank.Seven),
+      ]),
+      players: [
+        { id: "alice", hand: [JOKER_CARD, card(Suit.Hearts, Rank.Nine)] },
+        { id: "bob", hand: [card(Suit.Spades, Rank.Eight), card(Suit.Clubs, Rank.Two)] },
+        { id: "carol", hand: [card(Suit.Diamonds, Rank.Seven)] },
+      ],
+    });
+    const context = { playerId: "alice", players: game.players };
+
+    expect(
+      getPlayableCards(game.board, game.players[0]!.hand, game.variant, context),
+    ).toEqual([]);
+    expect(
+      validateTurn(game, "alice", {
+        type: TurnActionType.Play,
+        card: card(Suit.Hearts, Rank.Nine),
+      }),
+    ).toBeNull();
+  });
+
+  test("rejects spade-gate assistance when the actor holds the gate card", () => {
+    const game = jokerGame({
+      board: placeCards([
+        card(Suit.Spades, Rank.Seven),
+        card(Suit.Hearts, Rank.Seven),
+      ]),
+      players: [
+        {
+          id: "alice",
+          hand: [
+            JOKER_CARD,
+            card(Suit.Hearts, Rank.Eight),
+            card(Suit.Spades, Rank.Eight),
+          ],
+        },
+        { id: "bob", hand: [card(Suit.Clubs, Rank.Two)] },
+        { id: "carol", hand: [card(Suit.Diamonds, Rank.Seven)] },
+      ],
+    });
+
+    expect(
+      validateTurn(game, "alice", {
+        type: TurnActionType.Play,
+        card: card(Suit.Hearts, Rank.Eight),
+      }),
+    ).toBeNull();
+    expect(
+      validateTurn(game, "alice", {
+        type: TurnActionType.Play,
+        card: card(Suit.Spades, Rank.Eight),
+      })?.board[Suit.Spades],
+    ).toEqual({ min: Rank.Seven, max: Rank.Eight });
+  });
+
   test("finishes when an assisted play empties the actor's hand", () => {
     const result = validateTurn(jokerGame(), "alice", {
       type: TurnActionType.Play,

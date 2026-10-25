@@ -8,10 +8,11 @@ import {
   type Card,
   type TurnAction,
 } from '@opengamesonline/sevens';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { cardKey, PlayingCard, suitGlyph } from '@/components/cards/playing-card';
+import { cardLabel, gainedCards, placedCards } from '@/components/cards/card-text';
 import { RoomButton, RoomPanel } from '@/components/room/room-ui';
 import { GameCardSize, GameColors } from '@/constants/theme';
 import {
@@ -26,6 +27,7 @@ import {
   selectParticipantName,
   selectPlayableCards,
   selectSuitRuns,
+  type SevensGameState,
   type SevensSessionSnapshot,
 } from '@/features/multiplayer';
 
@@ -34,6 +36,42 @@ const handSuitOrder: Record<Suit, number> = {
   [Suit.Diamonds]: 1,
   [Suit.Clubs]: 2,
   [Suit.Hearts]: 3,
+};
+
+const boardRanks: readonly Rank[] = [
+  Rank.Ace,
+  Rank.Two,
+  Rank.Three,
+  Rank.Four,
+  Rank.Five,
+  Rank.Six,
+  Rank.Seven,
+  Rank.Eight,
+  Rank.Nine,
+  Rank.Ten,
+  Rank.Jack,
+  Rank.Queen,
+  Rank.King,
+];
+
+type CardReceipt = {
+  key: string;
+  gained: Card[];
+  lost: Card[];
+  title: string;
+  text: string;
+};
+
+type ReceiptTracker = {
+  tableId: string | null;
+  revision: number;
+  roundNumber: number;
+  prevStatus: GameStatus;
+  prevHand: readonly Card[];
+  prevBoard: SevensGameState['board'];
+  awaitingDraw: { donorId: string | null } | null;
+  lastLogKey: string | null;
+  queue: CardReceipt[];
 };
 
 export function GameTable({
@@ -58,7 +96,15 @@ export function GameTable({
   const game = snapshot.state;
   const [selection, setSelection] = useState<{ card: Card; revision: number } | null>(null);
   const [handWidth, setHandWidth] = useState(0);
+  const [boardWidth, setBoardWidth] = useState(0);
+  const [drawConfirmation, setDrawConfirmation] = useState<{ revision: number } | null>(null);
+  const [leaveConfirming, setLeaveConfirming] = useState(false);
+  const [logVisible, setLogVisible] = useState(false);
+  const [receipts, setReceipts] = useState<ReceiptTracker | null>(null);
+  const logScrollRef = useRef<ScrollView>(null);
   const selectedCard = selection?.revision === snapshot.revision ? selection.card : null;
+  const isDrawConfirming = drawConfirmation?.revision === snapshot.revision;
+  const visibleLogEntries = game?.moveLog ?? [];
 
   if (!game) {
     return (
@@ -77,13 +123,142 @@ export function GameTable({
   const selfId = snapshot.self?.id ?? null;
   const isPlayer = snapshot.self?.metadata.role === 'player';
   const showPlayableCards = snapshot.lobbyMetadata?.showPlayableCards ?? false;
+  const preventIllegalDraw = snapshot.lobbyMetadata?.preventIllegalDraw ?? false;
   const isCurrentPlayer = isPlayer && game.currentPlayerId === selfId;
   const isDonor = isPlayer && game.pendingDraw?.donorId === selfId;
   const isRequester = isPlayer && game.pendingDraw?.requesterId === selfId;
   const winnerName = selectParticipantName(snapshot, game.winnerId);
+  const leaveWarning =
+    game.status === GameStatus.Active
+      ? 'Leaving ends the game for everyone.'
+      : snapshot.role === 'host'
+        ? 'Leaving closes the table for everyone.'
+        : 'Leaving gives up your seat.';
   const currentName = selectParticipantName(snapshot, game.currentPlayerId) ?? 'Unknown player';
   const requesterName = selectParticipantName(snapshot, game.pendingDraw?.requesterId ?? null);
   const donorName = selectParticipantName(snapshot, game.pendingDraw?.donorId ?? null);
+  const currentPlayerIndex = game.players.findIndex(({ id }) => id === game.currentPlayerId);
+  const drawDonorId =
+    currentPlayerIndex >= 0
+      ? (game.players[(currentPlayerIndex - 1 + game.players.length) % game.players.length]?.id ??
+        null)
+      : null;
+  const drawDonorName = selectParticipantName(snapshot, drawDonorId);
+  const selfHand = hand ?? [];
+  const prevActive =
+    receipts !== null &&
+    receipts.tableId === snapshot.tableId &&
+    receipts.prevStatus === GameStatus.Active;
+  if (
+    (game.status === GameStatus.Active ||
+      (game.status === GameStatus.Finished && prevActive)) &&
+    (!receipts ||
+      receipts.tableId !== snapshot.tableId ||
+      receipts.revision !== snapshot.revision)
+  ) {
+    if (!receipts || receipts.tableId !== snapshot.tableId) {
+      setReceipts({
+        tableId: snapshot.tableId,
+        revision: snapshot.revision,
+        roundNumber: game.roundNumber,
+        prevStatus: game.status,
+        prevHand: selfHand,
+        prevBoard: game.board,
+        awaitingDraw: null,
+        lastLogKey:
+          game.moveLog.length > 0 ? game.moveLog[game.moveLog.length - 1]!.key : null,
+        queue: [],
+      });
+    } else {
+      const roundChanged = receipts.roundNumber !== game.roundNumber;
+      const gained = roundChanged ? [] : gainedCards(receipts.prevHand, selfHand);
+      const lost = roundChanged ? [] : gainedCards(selfHand, receipts.prevHand);
+      const forced = roundChanged ? [] : placedCards(receipts.prevBoard, game.board, lost);
+      const seenLogIndex = receipts.lastLogKey
+        ? game.moveLog.findIndex((entry) => entry.key === receipts.lastLogKey)
+        : -1;
+      const newLogEntries =
+        roundChanged || seenLogIndex < 0 ? [] : game.moveLog.slice(seenLogIndex + 1);
+      const nextLastLogKey =
+        game.moveLog.length > 0
+          ? game.moveLog[game.moveLog.length - 1]!.key
+          : receipts.lastLogKey;
+      const newReceipts: CardReceipt[] = [];
+      let awaitingDraw = roundChanged ? null : receipts.awaitingDraw;
+      if (!roundChanged && gained.length > 0 && selfId !== null) {
+        if (awaitingDraw && forced.length === 0) {
+          const donorName = awaitingDraw.donorId
+            ? (selectParticipantName(snapshot, awaitingDraw.donorId) ?? 'your opponent')
+            : 'your opponent';
+          newReceipts.push({
+            key: `${snapshot.revision}-receipt-${receipts.queue.length}`,
+            gained,
+            lost: [],
+            title: 'CARD RECEIVED',
+            text: `You received ${gained.map(cardLabel).join(', ')} from ${donorName}.`,
+          });
+          awaitingDraw = null;
+        } else if (forced.length === 0) {
+          newReceipts.push({
+            key: `${snapshot.revision}-caughtup-${receipts.queue.length}`,
+            gained,
+            lost: [],
+            title: 'CARD RECEIVED',
+            text: `You received ${gained.map(cardLabel).join(', ')}.`,
+          });
+        }
+      }
+      if (!roundChanged && forced.length > 0 && selfId !== null) {
+        const foreignBridges = newLogEntries.filter(
+          (entry) =>
+            entry.kind === 'bridge' && entry.actorId !== null && entry.actorId !== selfId,
+        );
+        const taken = forced.filter((mine) =>
+          foreignBridges.some((entry) =>
+            entry.cards.some((placed) => cardEquals(placed, mine)),
+          ),
+        );
+        if (taken.length > 0) {
+          const bridgeEntry = [...foreignBridges]
+            .reverse()
+            .find((entry) =>
+              taken.some((mine) =>
+                entry.cards.some((placed) => cardEquals(placed, mine)),
+              ),
+            );
+          const actorId = bridgeEntry?.actorId ?? null;
+          const actorName = actorId
+            ? (selectParticipantName(snapshot, actorId) ?? 'An opponent')
+            : 'An opponent';
+          newReceipts.push({
+            key: `${snapshot.revision}-forced-${receipts.queue.length + newReceipts.length}`,
+            gained,
+            lost: taken,
+            title: 'CARD SWAPPED',
+            text: `${actorName} used the Joker to play your ${taken.map(cardLabel).join(', ')} — you received ${gained.length > 0 ? gained.map(cardLabel).join(', ') : 'nothing'} in return.`,
+          });
+        }
+      }
+      setReceipts({
+        tableId: snapshot.tableId,
+        revision: snapshot.revision,
+        roundNumber: game.roundNumber,
+        prevStatus: game.status,
+        prevHand: selfHand,
+        prevBoard: game.board,
+        awaitingDraw,
+        lastLogKey: nextLastLogKey,
+        queue: [...receipts.queue, ...newReceipts],
+      });
+    }
+  }
+  const currentReceipt = receipts?.queue[0] ?? null;
+
+  function confirmReceipt() {
+    setReceipts((current) =>
+      current ? { ...current, queue: current.queue.slice(1) } : current,
+    );
+  }
   const illegalPlayerName = selectParticipantName(snapshot, game.lastIllegalMovePlayerId);
   const illegalMessage = game.lastIllegalMovePlayerId
     ? illegalMoveMessage(illegalPlayerName ?? 'A player')
@@ -111,18 +286,43 @@ export function GameTable({
   const cardsPerHandRow = handWidth
     ? Math.max(1, Math.min(10, Math.floor((handWidth - handCardWidth) / 25) + 1))
     : 8;
-  const handRowCount = Math.ceil(sortedHand.length / cardsPerHandRow);
-  const balancedCardsPerRow = handRowCount
-    ? Math.ceil(sortedHand.length / handRowCount)
-    : 0;
-  const handRows = Array.from({ length: handRowCount }, (_, index) =>
-    sortedHand.slice(
-      index * balancedCardsPerRow,
-      (index + 1) * balancedCardsPerRow,
-    ),
+  const handRows = Array.from(
+    { length: Math.ceil(sortedHand.length / cardsPerHandRow) },
+    (_, index) =>
+      sortedHand.slice(
+        index * cardsPerHandRow,
+        (index + 1) * cardsPerHandRow,
+      ),
   );
+  const handCardStep =
+    cardsPerHandRow > 1 && handWidth > 0
+      ? Math.max(
+          0,
+          Math.min(
+            handCardWidth + 8,
+            (handWidth - handCardWidth) / (cardsPerHandRow - 1),
+          ),
+        )
+      : 0;
+  const boardStep =
+    boardWidth > 0
+      ? Math.max(
+          12,
+          Math.min(
+            GameCardSize.compactWidth - 17,
+            (boardWidth - GameCardSize.compactWidth - 38) / (boardRanks.length - 1),
+          ),
+        )
+      : GameCardSize.compactWidth - 17;
 
   async function send(action: TurnAction) {
+    setDrawConfirmation(null);
+    if (action.type === TurnActionType.RequestDraw) {
+      const donorId = drawDonorId;
+      setReceipts((current) =>
+        current ? { ...current, awaitingDraw: { donorId } } : current,
+      );
+    }
     await onSend(action);
     setSelection(null);
   }
@@ -136,6 +336,11 @@ export function GameTable({
       !game.bots.some((bot) => bot.id === id) &&
       !snapshot.connectedParticipantIds.includes(id),
   );
+  const participantIds = new Set(snapshot.participants.map(({ id }) => id));
+  const missingPlayerLeft =
+    missingPlayer !== undefined &&
+    missingPlayer.id !== snapshot.self?.id &&
+    !participantIds.has(missingPlayer.id);
   const turnStatus =
     game.status === GameStatus.Finished
       ? `${winnerName ?? 'A player'} wins`
@@ -175,7 +380,9 @@ export function GameTable({
               ? reconnecting
                 ? 'Reconnecting to the table…'
                 : 'Your connection to the table was lost.'
-              : `Waiting for ${selectParticipantName(snapshot, missingPlayer.id) ?? 'a player'} to reconnect.`}
+              : missingPlayerLeft
+                ? 'A player left the table. The match cannot continue.'
+                : `Waiting for ${selectParticipantName(snapshot, missingPlayer.id) ?? 'a player'} to reconnect.`}
           </Text>
         </View>
       ) : null}
@@ -237,31 +444,57 @@ export function GameTable({
           </ScrollView>
 
           <RoomPanel style={styles.boardPanel}>
-            <View style={styles.suitRows}>
-              {suitRuns.map(({ suit, cards }) => (
-                <View key={suit} style={styles.suitRow}>
-                  <Text
-                    style={[
-                      styles.suitLabel,
-                      (suit === 'diamonds' || suit === 'hearts') && styles.redSuit,
-                    ]}
-                  >
-                    {suitGlyph(suit)}
-                  </Text>
-                  <View style={styles.run}>
-                    {cards.length === 0 ? (
-                      <PlayingCard card={{ suit, rank: Rank.Seven }} compact placeholder />
-                    ) : (
-                      cards.map((card, index) => (
-                        <View key={cardKey(card)} style={index > 0 ? styles.overlapCard : undefined}>
-                          <PlayingCard card={card} compact />
-                        </View>
-                      ))
-                    )}
-                  </View>
-                </View>
-              ))}
-            </View>
+            <View
+              style={styles.suitRows}
+              onLayout={({ nativeEvent }) => setBoardWidth(nativeEvent.layout.width)}
+            >
+              {suitRuns.map(({ suit, cards }) => {
+                const ranksOnBoard = new Map(
+                  cards.flatMap((card) =>
+                    isJokerCard(card) ? [] : [[card.rank, card] as const]),
+                );
+                return (
+                  <View key={suit} style={styles.suitRow}>
+                    <Text
+                      style={[
+                        styles.suitLabel,
+                        (suit === 'diamonds' || suit === 'hearts') && styles.redSuit,
+                      ]}
+                    >
+                      {suitGlyph(suit)}
+                    </Text>
+                    <View style={styles.run}>
+                      {boardRanks.map((rank, index) => {
+                        const overlap =
+                          index > 0
+                            ? { marginLeft: -(GameCardSize.compactWidth - boardStep) }
+                            : undefined;
+                        const card = ranksOnBoard.get(rank);
+                        if (card) {
+                          return (
+                            <View key={rank} style={overlap}>
+                              <PlayingCard card={card} compact />
+                            </View>
+                          );
+                        }
+                        if (cards.length === 0 && rank === Rank.Seven) {
+                          return (
+                            <View key={rank} style={overlap}>
+                              <PlayingCard
+                                card={{ suit, rank: Rank.Seven }}
+                                compact
+                                placeholder
+                              />
+                            </View>
+                          );
+                        }
+                        return <View key={rank} style={[styles.emptySlot, overlap]} />;
+                      })}
+                    </View>
+                    </View>
+                  );
+                })}
+              </View>
           </RoomPanel>
         </>
       )}
@@ -285,6 +518,52 @@ export function GameTable({
         </View>
       ) : null}
 
+      {game.status === GameStatus.Finished ? null : (
+        <View style={styles.actions}>
+          <View style={styles.actionButton}>
+            <RoomButton
+              label="Play selected"
+              variant="primary"
+              compact
+              disabled={!showTurnActions || !canAttemptPlay(selectedCard, actionPending)}
+              onPress={() => {
+                if (!selectedCard) return;
+                void send({ type: TurnActionType.Play, card: selectedCard });
+              }}
+            />
+          </View>
+          <View style={styles.actionButton}>
+            <RoomButton
+              label="Draw"
+              compact
+              disabled={
+                !showTurnActions || actionPending || (preventIllegalDraw && playableCards.length > 0)
+              }
+              onPress={() => setDrawConfirmation({ revision: snapshot.revision })}
+            />
+          </View>
+          <View style={styles.actionButton}>
+            <RoomButton
+              label={leaveLabel}
+              variant="danger"
+              compact
+              onPress={() => setLeaveConfirming(true)}
+            />
+          </View>
+        </View>
+      )}
+
+      {game.status === GameStatus.Active && !missingPlayer && isDonor ? (
+        <RoomButton
+          label="Give selected card"
+          variant="primary"
+          disabled={actionPending || !selectedCard}
+          onPress={() => {
+            if (selectedCard) void send({ type: TurnActionType.GiveCard, card: selectedCard });
+          }}
+        />
+      ) : null}
+
       {game.status === GameStatus.Finished ? null : hand ? (
         <View style={styles.handSection}>
           <View style={styles.handHeading}>
@@ -293,22 +572,26 @@ export function GameTable({
             </Text>
             <Text style={styles.handCount}>{hand.length} cards</Text>
           </View>
+          {visibleLogEntries.length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Open move log"
+              onPress={() => setLogVisible(true)}
+              style={({ pressed }) => [styles.logPreview, pressed && styles.logPreviewPressed]}
+            >
+              <Text style={styles.logPreviewTitle}>LOG · {visibleLogEntries.length}</Text>
+              <Text style={styles.logPreviewText} numberOfLines={1}>
+                {visibleLogEntries[visibleLogEntries.length - 1]!.text}
+              </Text>
+              <Text style={styles.logPreviewChevron}>▸</Text>
+            </Pressable>
+          ) : null}
           <View
             style={styles.hand}
             onLayout={({ nativeEvent }) => setHandWidth(nativeEvent.layout.width)}
           >
             {handRows.map((row) => {
-              const cardStep =
-                row.length > 1 && handWidth > 0
-                  ? Math.max(
-                      0,
-                      Math.min(
-                        handCardWidth + 8,
-                        (handWidth - handCardWidth) / (row.length - 1),
-                      ),
-                    )
-                  : 0;
-              const rowWidth = handCardWidth + cardStep * (row.length - 1);
+              const rowWidth = handCardWidth + handCardStep * (row.length - 1);
 
               return (
                 <View
@@ -323,7 +606,7 @@ export function GameTable({
                     return (
                       <View
                         key={cardKey(card)}
-                        style={[styles.overlappingHandCard, { left: cardStep * index }]}
+                        style={[styles.overlappingHandCard, { left: handCardStep * index }]}
                       >
                         <PlayingCard
                           card={card}
@@ -354,17 +637,6 @@ export function GameTable({
         </View>
       )}
 
-      {game.status === GameStatus.Active && !missingPlayer && isDonor ? (
-        <RoomButton
-          label="Give selected card"
-          variant="primary"
-          disabled={actionPending || !selectedCard}
-          onPress={() => {
-            if (selectedCard) void send({ type: TurnActionType.GiveCard, card: selectedCard });
-          }}
-        />
-      ) : null}
-
       {game.status === GameStatus.Finished && snapshot.role === 'host' ? (
         <RoomButton
           label={continuePending ? 'Returning to lobby…' : 'Continue to lobby'}
@@ -380,46 +652,146 @@ export function GameTable({
         </View>
       ) : null}
 
-      {showTurnActions ? (
-        <View style={styles.actions}>
-          <View style={styles.actionButton}>
-            <RoomButton
-              label="Play selected"
-              variant="primary"
-              compact
-              disabled={!canAttemptPlay(selectedCard, actionPending)}
-              onPress={() => {
-                if (!selectedCard) return;
-                void send({ type: TurnActionType.Play, card: selectedCard });
-              }}
-            />
-          </View>
-          <View style={styles.actionButton}>
-            <RoomButton
-              label="Draw"
-              compact
-              disabled={actionPending}
-              onPress={() => void send({ type: TurnActionType.RequestDraw })}
-            />
-          </View>
-          <View style={styles.actionButton}>
-            <RoomButton
-              label={leaveLabel}
-              variant="danger"
-              compact
-              onPress={onLeave}
-            />
-          </View>
-        </View>
-      ) : null}
-
-      {!showTurnActions ? (
+      {game.status === GameStatus.Finished ? (
         <RoomButton
           label={leaveLabel}
           variant="danger"
-          onPress={onLeave}
+          onPress={() => setLeaveConfirming(true)}
         />
       ) : null}
+
+      <Modal
+        visible={logVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLogVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.logTitle}>MOVE LOG · {visibleLogEntries.length}</Text>
+            <ScrollView
+              ref={logScrollRef}
+              nestedScrollEnabled
+              style={styles.logList}
+              onContentSizeChange={() => logScrollRef.current?.scrollToEnd({ animated: true })}
+            >
+              {visibleLogEntries.length > 0 ? (
+                visibleLogEntries.map((entry, index) => (
+                  <Text
+                    key={entry.key}
+                    style={[
+                      styles.logEntry,
+                      index === visibleLogEntries.length - 1 && styles.logEntryLatest,
+                    ]}
+                  >
+                    {entry.text}
+                  </Text>
+                ))
+              ) : (
+                <Text style={styles.logEntry}>No moves yet.</Text>
+              )}
+            </ScrollView>
+            <RoomButton label="Close" compact onPress={() => setLogVisible(false)} />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showTurnActions && isDrawConfirming}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDrawConfirmation(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.drawConfirmCopy}>
+              <Text style={styles.drawConfirmTitle}>DRAW A CARD?</Text>
+              <Text style={styles.drawConfirmText}>
+                Drawing takes a card from {drawDonorName ?? 'your opponent'} and ends your chance
+                to play this turn. This can&apos;t be undone.
+              </Text>
+            </View>
+            <View style={styles.modalActions}>
+              <View style={styles.modalButton}>
+                <RoomButton label="Cancel" compact onPress={() => setDrawConfirmation(null)} />
+              </View>
+              <View style={styles.modalButton}>
+                <RoomButton
+                  label={actionPending ? 'Drawing…' : 'Confirm draw'}
+                  variant="primary"
+                  compact
+                  disabled={actionPending}
+                  onPress={() => void send({ type: TurnActionType.RequestDraw })}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={currentReceipt !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={confirmReceipt}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.drawConfirmCopy}>
+              <Text style={styles.drawConfirmTitle}>
+                {currentReceipt?.title ?? 'CARD RECEIVED'}
+              </Text>
+              <Text style={styles.drawConfirmText}>{currentReceipt?.text}</Text>
+            </View>
+            {(currentReceipt?.lost.length ?? 0) > 0 ? (
+              <View style={styles.receivedCards}>
+                {currentReceipt?.lost.map((card) => (
+                  <PlayingCard key={cardKey(card)} card={card} compact />
+                ))}
+              </View>
+            ) : null}
+            <View style={styles.receivedCards}>
+              {currentReceipt?.gained.map((card) => (
+                <PlayingCard key={cardKey(card)} card={card} />
+              ))}
+            </View>
+            <RoomButton label="Got it" variant="primary" compact onPress={confirmReceipt} />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={leaveConfirming}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLeaveConfirming(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.drawConfirmCopy}>
+              <Text style={styles.drawConfirmTitle}>LEAVE THIS TABLE?</Text>
+              <Text style={styles.drawConfirmText}>{leaveWarning}</Text>
+            </View>
+            <View style={styles.modalActions}>
+              <View style={styles.modalButton}>
+                <RoomButton label="Cancel" compact onPress={() => setLeaveConfirming(false)} />
+              </View>
+              <View style={styles.modalButton}>
+                <RoomButton
+                  label={leaveLabel}
+                  variant="danger"
+                  compact
+                  onPress={() => {
+                    setLeaveConfirming(false);
+                    onLeave();
+                  }}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -510,7 +882,10 @@ const styles = StyleSheet.create({
   suitLabel: { width: 30, color: GameColors.cream, fontSize: 23, textAlign: 'center' },
   redSuit: { color: '#EE8C87' },
   run: { flex: 1, flexDirection: 'row', justifyContent: 'center', paddingRight: 8 },
-  overlapCard: { marginLeft: -17 },
+  emptySlot: {
+    width: GameCardSize.compactWidth,
+    height: GameCardSize.compactHeight,
+  },
   drawNotice: {
     borderRadius: 14,
     borderWidth: 1,
@@ -520,6 +895,48 @@ const styles = StyleSheet.create({
   },
   drawNoticeTitle: { color: GameColors.gold, fontSize: 10, fontWeight: '900', letterSpacing: 1.6 },
   drawNoticeText: { color: GameColors.cream, marginTop: 5, lineHeight: 20 },
+  logTitle: { color: GameColors.gold, fontSize: 10, fontWeight: '900', letterSpacing: 1.6 },
+  logPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: GameColors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(0,0,0,0.13)',
+  },
+  logPreviewPressed: { opacity: 0.7 },
+  logPreviewTitle: { color: GameColors.gold, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
+  logPreviewText: { flex: 1, color: GameColors.creamMuted, fontSize: 12 },
+  logPreviewChevron: { color: GameColors.gold, fontSize: 12, fontWeight: '900' },
+  logList: { maxHeight: 300 },
+  logEntry: { color: GameColors.whiteMuted, fontSize: 12, lineHeight: 19 },
+  logEntryLatest: { color: GameColors.cream },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: GameColors.gold,
+    padding: 18,
+    gap: 16,
+    backgroundColor: GameColors.panelSolid,
+  },
+  modalActions: { flexDirection: 'row', gap: 10 },
+  modalButton: { flex: 1 },
+  receivedCards: { flexDirection: 'row', justifyContent: 'center', gap: 8 },
+  drawConfirmCopy: { gap: 5 },
+  drawConfirmTitle: { color: GameColors.gold, fontSize: 10, fontWeight: '900', letterSpacing: 1.6 },
+  drawConfirmText: { color: GameColors.cream, lineHeight: 20 },
   illegalNotice: {
     borderRadius: 12,
     borderWidth: 1,
@@ -539,6 +956,7 @@ const styles = StyleSheet.create({
   },
   handRow: {
     position: 'relative',
+    alignSelf: 'flex-start',
     height: GameCardSize.compactHeight * 2,
   },
   overlappingHandCard: { position: 'absolute', top: 0 },

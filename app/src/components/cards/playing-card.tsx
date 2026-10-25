@@ -1,30 +1,11 @@
-import { Rank, Suit, isJokerCard, type Card } from '@opengamesonline/sevens';
+import { Suit, isJokerCard, type Card } from '@opengamesonline/sevens';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GameCardSize, GameColors } from '@/constants/theme';
 
-const rankLabels: Record<Rank, string> = {
-  [Rank.Ace]: 'A',
-  [Rank.Two]: '2',
-  [Rank.Three]: '3',
-  [Rank.Four]: '4',
-  [Rank.Five]: '5',
-  [Rank.Six]: '6',
-  [Rank.Seven]: '7',
-  [Rank.Eight]: '8',
-  [Rank.Nine]: '9',
-  [Rank.Ten]: '10',
-  [Rank.Jack]: 'J',
-  [Rank.Queen]: 'Q',
-  [Rank.King]: 'K',
-};
+import { rankLabels, suitGlyphs } from './card-text';
 
-const suitGlyphs: Record<Suit, string> = {
-  [Suit.Clubs]: '♣',
-  [Suit.Diamonds]: '♦',
-  [Suit.Hearts]: '♥',
-  [Suit.Spades]: '♠',
-};
+export { cardLabel, suitGlyph } from './card-text';
 
 export function cardKey(card: Card): string {
   if (isJokerCard(card)) return 'joker';
@@ -67,10 +48,22 @@ export function PlayingCard({
         compact ? styles.compactCard : handSize ? styles.handCard : styles.fullCard,
         placeholder && styles.placeholder,
         selected && (compact || handSize ? styles.compactSelected : styles.selected),
-        !playable && selectable && styles.unplayable,
         pressed && selectable && styles.pressed,
       ]}
     >
+      {!playable && !placeholder ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.dimOverlay,
+            compact
+              ? styles.compactDimOverlay
+              : handSize
+                ? styles.handDimOverlay
+                : styles.fullDimOverlay,
+          ]}
+        />
+      ) : null}
       {isJokerCard(card) ? (
         <>
           <View style={[styles.jokerRail, compact && styles.compactJokerRail]}>
@@ -109,10 +102,6 @@ export function PlayingCard({
       )}
     </Pressable>
   );
-}
-
-export function suitGlyph(suit: Suit): string {
-  return suitGlyphs[suit];
 }
 
 const styles = StyleSheet.create({
@@ -198,7 +187,17 @@ const styles = StyleSheet.create({
     shadowColor: GameColors.gold,
     shadowOpacity: 0.55,
   },
-  unplayable: { opacity: 0.54 },
+  dimOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(4,43,35,0.5)',
+  },
+  compactDimOverlay: { borderRadius: 6 },
+  handDimOverlay: { borderRadius: 10 },
+  fullDimOverlay: { borderRadius: 12 },
   placeholder: { opacity: 0.26, backgroundColor: 'transparent', borderStyle: 'dashed' },
   pressed: { transform: [{ translateY: -5 }] },
 });

@@ -2,15 +2,14 @@ import { Rank, SevensVariant, Suit } from '@opengamesonline/sevens';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
   Switch,
   Text,
   View,
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PlayingCard } from '@/components/cards/playing-card';
@@ -54,6 +53,7 @@ export default function HomeScreen() {
   const [variant, setVariant] = useState(SevensVariant.Standard);
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [showPlayableCards, setShowPlayableCards] = useState(false);
+  const [preventIllegalDraw, setPreventIllegalDraw] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [usernameError, setUsernameError] = useState<string | null>(null);
 
@@ -93,6 +93,7 @@ export default function HomeScreen() {
       role,
       maxPlayers,
       showPlayableCards,
+      preventIllegalDraw,
       variant,
     });
     if (created) {
@@ -159,11 +160,15 @@ export default function HomeScreen() {
         visible={showCreate}
         onRequestClose={() => setShowCreate(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalBackdrop}
-        >
+        <View style={styles.modalBackdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowCreate(false)} />
+          <KeyboardAwareScrollView
+            style={styles.modalSheet}
+            contentContainerStyle={styles.modalSheetContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            bottomOffset={16}
+          >
           <View
             style={[
               styles.modalCard,
@@ -241,6 +246,21 @@ export default function HomeScreen() {
                 thumbColor={showPlayableCards ? GameColors.gold : GameColors.creamMuted}
               />
             </View>
+            <View style={styles.settingRow}>
+              <View style={styles.settingCopy}>
+                <Text style={styles.fieldLabel}>PREVENT ILLEGAL DRAWS</Text>
+                <Text style={styles.capacityHint}>
+                  Drawing is only allowed when no legal play exists.
+                </Text>
+              </View>
+              <Switch
+                accessibilityLabel="Prevent illegal draws"
+                value={preventIllegalDraw}
+                onValueChange={setPreventIllegalDraw}
+                trackColor={{ false: GameColors.feltLight, true: GameColors.goldDark }}
+                thumbColor={preventIllegalDraw ? GameColors.gold : GameColors.creamMuted}
+              />
+            </View>
             <ErrorBanner message={formError ?? error} />
             <RoomButton
               label={busy ? 'Creating…' : 'Create lobby'}
@@ -250,7 +270,8 @@ export default function HomeScreen() {
             />
             <RoomButton label="Cancel" disabled={busy} onPress={() => setShowCreate(false)} />
           </View>
-        </KeyboardAvoidingView>
+          </KeyboardAwareScrollView>
+        </View>
       </Modal>
     </RoomScreen>
   );
@@ -283,6 +304,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,18,14,0.74)',
   },
+  modalSheet: { width: '100%', maxHeight: '100%' },
+  modalSheetContent: { flexGrow: 1, justifyContent: 'flex-end' },
   modalCard: {
     width: '100%',
     maxWidth: 720,
