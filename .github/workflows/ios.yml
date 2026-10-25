@@ -1,0 +1,106 @@
+name: iOS
+
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Replace outdated PR runs, but never interrupt a signed build or submission.
+concurrency:
+  group: ios-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: CI checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: ./.github/actions/setup-project
+      - name: Type-check library
+        working-directory: library
+        run: bun run typecheck
+      - name: Test library
+        working-directory: library
+        run: bun test
+      - name: Type-check app
+        working-directory: app
+        run: npm run check
+      - name: Lint app
+        working-directory: app
+        run: npm run lint
+      - name: Test app policies
+        working-directory: app
+        run: npm run test:policy
+      - name: Test bridge helpers
+        working-directory: app
+        run: npm run test:bridge
+
+  deploy:
+    name: Build and submit to TestFlight
+    needs: checks
+    if: >-
+      github.ref == 'refs/heads/dev' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: macos-26
+    timeout-minutes: 120
+    environment: testflight
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: ./.github/actions/setup-project
+      - name: Select Xcode
+        run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
+      - name: Verify native build tools
+        run: |
+          xcodebuild -version
+          pod --version
+          fastlane --version
+      - name: Verify Expo token is configured
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [[ -z "$EXPO_TOKEN" ]]; then
+            echo '::error::Add EXPO_TOKEN to the testflight environment secrets. See docs/ios-deployment.md.'
+            exit 1
+          fi
+      - name: Set up EAS
+        uses: expo/expo-github-action@b184ff86a3c926240f1b6db41764c83a01c02eef
+        with:
+          eas-version: '25.3.0'
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Build signed iOS app locally
+        working-directory: app
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          # Match the documented installation policy for the local LAN packages.
+          # EAS explicitly runs its pre-install hook despite this npm setting.
+          NPM_CONFIG_IGNORE_SCRIPTS: 'true'
+        run: >-
+          eas build --platform ios --profile production --local --non-interactive
+          --output "${{ runner.temp }}/sevens.ipa"
+      - name: Save signed binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: sevens-ios-${{ github.run_number }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sevens.ipa
+          if-no-files-found: error
+          retention-days: 14
+      - name: Submit to TestFlight
+        working-directory: app
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: >-
+          eas submit --platform ios --profile production --non-interactive --wait --no-auto-testflight-setup
+          --path "${{ runner.temp }}/sevens.ipa"
