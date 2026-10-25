@@ -13,6 +13,7 @@
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.drasolabs.sevens",
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSLocalNetworkUsageDescription": "Discover and connect to multiplayer games on your local network.",
         "NSBonjourServices": [
           "_expo-lan-game._tcp"
