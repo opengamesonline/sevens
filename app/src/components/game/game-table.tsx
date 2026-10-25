@@ -732,7 +732,7 @@ export function GameTable({
       <Modal
         visible={currentReceipt !== null}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={confirmReceipt}
       >
         <View style={styles.modalOverlay}>
