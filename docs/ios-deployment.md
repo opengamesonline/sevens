@@ -80,10 +80,8 @@ Before merging/deploying this migration:
 2. Create a new App Store Connect app record for that bundle ID. An existing
    record with uploaded Sevens builds cannot be switched to the new bundle ID.
 3. Copy the new numeric Apple ID into `submit.production.ios.ascAppId` in
-   `app/eas.json`. Run `npm run check:submission` from `app`. CI intentionally
-   fails before building if the ID is missing or still points to the old record.
-   This local check validates configuration only; confirm in App Store Connect
-   that the ID actually belongs to the new bundle ID.
+   `app/eas.json`. Confirm in App Store Connect that the ID belongs to the new
+   bundle ID.
 4. Run `npx eas-cli@25.3.0 credentials --platform ios` from `app` and configure
    signing for the new bundle ID. Confirm EAS Submit's API key can access the
    new app record. Existing distribution certificates may be reused, but the

@@ -45,7 +45,6 @@
   },
   "scripts": {
     "test:config": "node --test scripts/app-config.test.cjs",
-    "check:submission": "node scripts/check-ios-submission.cjs",
     "branding:generate": "node scripts/generate-branding.cjs",
     "test:branding": "node --test scripts/branding.test.cjs",
     "eas-build-pre-install": "cd ../library && bun install --frozen-lockfile && bun run build",

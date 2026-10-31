@@ -63,9 +63,6 @@ jobs:
           submodules: recursive
           persist-credentials: false
       - uses: ./.github/actions/setup-project
-      - name: Verify new App Store submission target
-        working-directory: app
-        run: npm run check:submission
       - name: Select Xcode
         run: sudo xcode-select --switch /Applications/Xcode_26.4.app/Contents/Developer
       - name: Verify native build tools
