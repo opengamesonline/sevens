@@ -9,7 +9,7 @@ import {
   validateTurn,
   type Card,
   type SevensGameObject,
-} from "../src/index.js";
+} from "../../src/index.js";
 
 const card = (suit: Suit, rank: Rank): Card => ({ suit, rank });
 const sevenOfSpades = card(Suit.Spades, Rank.Seven);

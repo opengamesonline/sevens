@@ -6,7 +6,7 @@ import {
   Rank,
   SevensVariant,
   Suit,
-} from "../src/index.js";
+} from "../../src/index.js";
 
 describe("initializeSevens", () => {
   test("deals every card and starts with the holder of the seven of spades", () => {

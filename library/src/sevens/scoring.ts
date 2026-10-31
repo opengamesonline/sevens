@@ -1,4 +1,4 @@
-import { isJokerCard } from "./cards.js";
+import { isJokerCard } from "../shared/cards.js";
 import { GameStatus, Rank, type Card, type FinalScore, type SevensGameObject } from "./types.js";
 
 function scoreCard(card: Card): number {

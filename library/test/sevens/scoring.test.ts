@@ -8,7 +8,7 @@ import {
   Suit,
   type Card,
   type SevensGameObject,
-} from "../src/index.js";
+} from "../../src/index.js";
 
 const card = (rank: Rank): Card => ({ suit: Suit.Spades, rank });
 

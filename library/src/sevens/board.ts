@@ -1,4 +1,4 @@
-import { isJokerCard } from "./cards.js";
+import { isJokerCard } from "../shared/cards.js";
 import { Rank, Suit, type BoardState, type Card } from "./types.js";
 
 export function createEmptyBoard(): BoardState {

@@ -3,12 +3,14 @@ import { StatusBar } from 'expo-status-bar';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 
 import { GameColors } from '@/constants/theme';
-import { SevensMultiplayerProvider } from '@/features/multiplayer';
+import { CardRoomProvider } from '@/features/card-room/room-provider';
+import { ActiveSession } from '@/features/card-room/active-session';
 
 export default function RootLayout() {
   return (
-    <SevensMultiplayerProvider>
+    <CardRoomProvider>
       <KeyboardProvider>
+        <ActiveSession>
         <StatusBar style="light" />
         <Stack
           screenOptions={{
@@ -21,7 +23,8 @@ export default function RootLayout() {
           <Stack.Screen name="games" />
           <Stack.Screen name="session" options={{ gestureEnabled: false }} />
         </Stack>
+        </ActiveSession>
       </KeyboardProvider>
-    </SevensMultiplayerProvider>
+    </CardRoomProvider>
   );
 }

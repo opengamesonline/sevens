@@ -4,7 +4,7 @@ import test from 'node:test';
 import { JOKER_CARD, Rank, Suit, createEmptyBoard, placeCard } from '@opengamesonline/sevens';
 
 import { gainedCards, placedCards } from '../src/components/cards/card-text';
-import { sortByLobbyStandings } from '../src/features/multiplayer/presentation';
+import { sortByLobbyStandings } from '../src/features/sevens/presentation';
 
 function points(entries: readonly (readonly [string, number])[]): Map<string, number> {
   return new Map(entries);

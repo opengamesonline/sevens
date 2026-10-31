@@ -20,7 +20,7 @@ import {
   illegalMoveMessage,
   shouldPresentCardAsPlayable,
   sortFinalScores,
-} from '@/features/multiplayer/presentation';
+} from '@/features/sevens/presentation';
 import {
   selectOpponents,
   selectOwnHand,
@@ -29,7 +29,7 @@ import {
   selectSuitRuns,
   type SevensGameState,
   type SevensSessionSnapshot,
-} from '@/features/multiplayer';
+} from '@/features/sevens';
 
 const handSuitOrder: Record<Suit, number> = {
   [Suit.Spades]: 0,

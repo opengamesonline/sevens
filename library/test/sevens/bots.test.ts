@@ -14,7 +14,7 @@ import {
   type Card,
   type SevensGameObject,
   type StandardCard,
-} from "../src/index.js";
+} from "../../src/index.js";
 
 const card = (suit: Suit, rank: Rank): StandardCard => ({ suit, rank });
 

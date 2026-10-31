@@ -1,4 +1,4 @@
-import { isJokerCard } from "./cards.js";
+import { isJokerCard } from "../shared/cards.js";
 import {
   BotPlaystyle,
   GameStatus,

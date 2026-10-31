@@ -1,5 +1,5 @@
 import { isBoardEmpty, isStandardPlayable, placeCard } from "./board.js";
-import { JOKER_CARD, cardEquals, createDeck, isJokerCard } from "./cards.js";
+import { JOKER_CARD, cardEquals, createDeck, isJokerCard } from "../shared/cards.js";
 import {
   Rank,
   SevensVariant,

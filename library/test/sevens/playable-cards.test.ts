@@ -9,7 +9,7 @@ import {
   Suit,
   type BoardState,
   type Card,
-} from "../src/index.js";
+} from "../../src/index.js";
 
 const card = (suit: Suit, rank: Rank): Card => ({ suit, rank });
 

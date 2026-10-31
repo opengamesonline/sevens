@@ -21,20 +21,20 @@ import {
   selectOwnHand,
   selectPlayableCards,
   selectSuitRuns,
-} from '../src/features/multiplayer/selectors';
+} from '../src/features/sevens/selectors';
 import {
   createSevensParticipantMetadata,
-} from '../src/features/multiplayer/sevens-policy';
+} from '../src/features/sevens/sevens-policy';
 import {
   canAttemptPlay,
   illegalMoveMessage,
   shouldPresentCardAsPlayable,
   sortFinalScores,
-} from '../src/features/multiplayer/presentation';
+} from '../src/features/sevens/presentation';
 import type {
   SevensParticipantMetadata,
   SevensSessionSnapshot,
-} from '../src/features/multiplayer/types';
+} from '../src/features/sevens/types';
 
 const participants: Participant<SevensParticipantMetadata>[] = [
   { id: 'alice', name: 'Alice', slot: 0, metadata: createSevensParticipantMetadata('player') },

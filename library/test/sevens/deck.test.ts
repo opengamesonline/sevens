@@ -7,7 +7,7 @@ import {
   Rank,
   shuffleCards,
   Suit,
-} from "../src/index.js";
+} from "../../src/index.js";
 
 describe("deck", () => {
   test("creates one of every standard card", () => {

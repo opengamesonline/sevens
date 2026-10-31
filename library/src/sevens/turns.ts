@@ -1,4 +1,4 @@
-import { cardEquals } from "./cards.js";
+import { cardEquals } from "../shared/cards.js";
 import {
   GameStatus,
   TurnActionType,

@@ -1,6 +1,6 @@
 import { createEmptyBoard } from "./board.js";
-import { cardEquals } from "./cards.js";
-import { dealCards, shuffleCards } from "./deck.js";
+import { cardEquals } from "../shared/cards.js";
+import { dealCards, shuffleCards } from "../shared/deck.js";
 import {
   GameStatus,
   Rank,

@@ -19,7 +19,7 @@ import {
   type SevensGameObject,
   type StandardCard,
   type VariantRules,
-} from "../src/index.js";
+} from "../../src/index.js";
 
 const card = (suit: Suit, rank: Rank): StandardCard => ({ suit, rank });
 

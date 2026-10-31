@@ -1,40 +1,11 @@
-export enum Suit {
-  Clubs = "clubs",
-  Diamonds = "diamonds",
-  Hearts = "hearts",
-  Spades = "spades",
-}
-
-export enum Rank {
-  Ace = 1,
-  Two,
-  Three,
-  Four,
-  Five,
-  Six,
-  Seven,
-  Eight,
-  Nine,
-  Ten,
-  Jack,
-  Queen,
-  King,
-}
+import type { Card, GameStatus, PlayerState, Rank, Suit } from "../shared/types.js";
+export * from "../shared/types.js";
 
 export enum SevensVariant {
   Standard = "standard",
   Joker = "joker",
 }
 
-export enum BotPlaystyle {
-  Random = "random",
-  Cautious = "cautious",
-}
-
-export enum GameStatus {
-  Active = "active",
-  Finished = "finished",
-}
 
 export enum TurnActionType {
   Play = "play",
@@ -42,17 +13,6 @@ export enum TurnActionType {
   GiveCard = "giveCard",
 }
 
-export interface StandardCard {
-  readonly kind?: never;
-  readonly suit: Suit;
-  readonly rank: Rank;
-}
-
-export interface JokerCard {
-  readonly kind: "joker";
-}
-
-export type Card = StandardCard | JokerCard;
 
 export interface SuitBoardState {
   readonly min: Rank | null;
@@ -61,10 +21,6 @@ export interface SuitBoardState {
 
 export type BoardState = Readonly<Record<Suit, SuitBoardState>>;
 
-export interface PlayerState {
-  readonly id: string;
-  readonly hand: readonly Card[];
-}
 
 export interface FinalScore {
   readonly playerId: string;
@@ -101,15 +57,6 @@ export interface GiveCardAction {
 }
 
 export type TurnAction = PlayAction | RequestDrawAction | GiveCardAction;
-export type RandomSource = () => number;
-
-export interface InitializeOptions {
-  readonly random?: RandomSource;
-}
-
-export interface BotStrategyOptions {
-  readonly random?: RandomSource;
-}
 
 export type BotStrategy = (
   game: SevensGameObject,
