@@ -7,7 +7,7 @@ export type TablePlayer = {
 };
 
 export function PlayerStrip({ players, mark }: { players: readonly TablePlayer[]; mark: string }) {
-  return <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.players}>
+  return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.strip} contentContainerStyle={styles.players}>
     {players.map((player) => <View key={player.id} style={[styles.player, player.isCurrentPlayer && styles.current]}
       accessible accessibilityLabel={`${player.name}${player.isSelf ? ', you' : ''}, ${player.cardCount} cards${player.isCurrentPlayer ? ', current turn' : ''}${player.detail ? `, ${player.detail}` : ''}${player.offline ? ', offline' : ''}`}>
       <View style={styles.cardBack}><Text style={styles.mark}>{mark}</Text></View>
@@ -22,7 +22,10 @@ export function PlayerStrip({ players, mark }: { players: readonly TablePlayer[]
 }
 
 const styles = StyleSheet.create({
-  players: { gap: 9, paddingVertical: 2 },
+  // A horizontal ScrollView normally grows to fill spare vertical space. Keep
+  // the strip and its cards at their natural height as the hand gets shorter.
+  strip: { flexGrow: 0, flexShrink: 0 },
+  players: { gap: 9, paddingVertical: 2, alignItems: 'center' },
   player: { flexDirection: 'row', alignItems: 'center', gap: 9, borderRadius: 14, borderWidth: 1, borderColor: GameColors.border, padding: 9, minWidth: 144, maxWidth: 220, backgroundColor: 'rgba(0,0,0,0.13)' },
   current: { borderColor: GameColors.gold, backgroundColor: 'rgba(215,174,90,0.1)' },
   cardBack: { width: 30, height: 42, borderRadius: 5, borderWidth: 2, borderColor: GameColors.creamMuted, backgroundColor: GameColors.red, alignItems: 'center', justifyContent: 'center' },
