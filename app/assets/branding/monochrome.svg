@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <title>Sevens themed icon mask</title>
+  <title>Sevens — seven of spades themed icon mask</title>
   <defs>
     <mask id="cutouts" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
       <rect width="1024" height="1024" fill="white"/>
@@ -11,7 +11,7 @@
       <rect width="1024" height="1024" fill="white"/>
       <g transform="rotate(9 512 512)" fill="black">
         <path d="M452 316H674V372L558 590H486L604 378H452Z"/>
-        <path d="M634 578L662 616L634 654L606 616Z"/>
+        <path d="M634 578C626 592 602 604 602 620C602 638 622 646 630 632C630 642 626 650 620 654H648C642 650 638 642 638 632C646 646 666 638 666 620C666 604 642 592 634 578Z"/>
       </g>
     </mask>
   </defs>
