@@ -1,7 +1,7 @@
 # Sevens branding
 
-The mark combines a bold seven, a red diamond, and a fan of playing cards. It
-uses the game's existing felt, cream, gold, and red palette. All lettering is
+The mark combines a bold black seven, a black spade, and a fan of playing cards.
+It uses the game's existing felt, cream, gold, and black-suit palette. All lettering is
 vector geometry; no font or stock artwork is required.
 
 ## Assets
@@ -27,7 +27,7 @@ npm run test:branding
 The iOS icon keeps a separate background and vector foreground for system
 rendering. Android foreground and monochrome artwork fit within the central
 66/108 safe circle; the system supplies its own launcher mask. The monochrome
-variant uses transparent cutouts for the seven and diamond.
+variant uses transparent cutouts for the seven and spade.
 
 The launch screen reuses the mark on `#042B23`, matching the initial game UI.
 It does not need its own illustration, animation, or artificial loading delay.
