@@ -1,8 +1,10 @@
-# Sevens branding
+# Card Room branding
 
-The mark combines a bold seven, a red diamond, and a fan of playing cards. It
-uses the game's existing felt, cream, gold, and red palette. All lettering is
-vector geometry; no font or stock artwork is required.
+The mark is an overhead view of a shared round table: green felt, a gold rim,
+and four cream cards bearing a spade, heart, club, and diamond. There are no
+ranks or game-specific numerals. The cards face the four seats around the table,
+emphasizing playing together rather than a single card game. All artwork is
+vector geometry; no fonts or stock artwork are required.
 
 ## Assets
 
@@ -27,7 +29,7 @@ npm run test:branding
 The iOS icon keeps a separate background and vector foreground for system
 rendering. Android foreground and monochrome artwork fit within the central
 66/108 safe circle; the system supplies its own launcher mask. The monochrome
-variant uses transparent cutouts for the seven and diamond.
+variant uses transparent card cutouts with solid suit symbols inside the table.
 
 The launch screen reuses the mark on `#042B23`, matching the initial game UI.
 It does not need its own illustration, animation, or artificial loading delay.

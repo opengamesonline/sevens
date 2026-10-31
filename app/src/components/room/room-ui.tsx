@@ -1,3 +1,4 @@
+import { Image } from 'expo-image';
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -37,10 +38,12 @@ export function RoomScreen({ children, scroll = true }: { children: ReactNode; s
 export function BrandHeader({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
     <View style={styles.brandRow}>
-      <View style={styles.brandMark}>
-        <Text style={styles.brandMarkRank}>7</Text>
-        <Text style={styles.brandMarkSuit}>♠</Text>
-      </View>
+      <Image
+        source={require('../../../assets/images/splash-icon.png')}
+        style={styles.brandMark}
+        contentFit="contain"
+        accessibilityLabel="Card Room shared table"
+      />
       <View style={styles.brandCopy}>
         <Text style={styles.eyebrow}>{eyebrow}</Text>
         <Text style={styles.brandTitle}>{title}</Text>
@@ -178,19 +181,9 @@ const styles = StyleSheet.create({
   content: { flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center', padding: 20, gap: 18 },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginVertical: 8 },
   brandMark: {
-    width: 56,
+    width: 76,
     height: 76,
-    borderRadius: 10,
-    backgroundColor: GameColors.cream,
-    padding: 7,
-    shadowColor: GameColors.shadow,
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 7 },
-    elevation: 8,
   },
-  brandMarkRank: { color: GameColors.blackSuit, fontSize: 22, fontWeight: '800', lineHeight: 23 },
-  brandMarkSuit: { color: GameColors.blackSuit, fontSize: 18, lineHeight: 19 },
   brandCopy: { gap: 2 },
   eyebrow: { color: GameColors.gold, fontSize: 11, fontWeight: '800', letterSpacing: 2.2 },
   brandTitle: { color: GameColors.white, fontSize: 32, fontWeight: '700', letterSpacing: -1 },

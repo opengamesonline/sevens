@@ -109,7 +109,7 @@ export default function HomeScreen() {
 
   return (
     <RoomScreen>
-      <BrandHeader eyebrow="LOCAL CARD ROOM" title="Sevens" />
+      <BrandHeader eyebrow="BY DRASO LABS" title="Card Room" />
 
       <View style={styles.hero}>
         <View style={styles.cardFan}>
@@ -123,7 +123,7 @@ export default function HomeScreen() {
             <PlayingCard card={{ suit: Suit.Spades, rank: Rank.Seven }} />
           </View>
         </View>
-        <Text style={styles.heroTitle}>Build every suit from seven.</Text>
+        <Text style={styles.heroTitle}>Sevens · Build every suit from seven.</Text>
         <Text style={styles.heroBody}>
           Host a table on your local network. No account, server, or internet connection required.
         </Text>

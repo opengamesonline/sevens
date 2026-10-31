@@ -24,7 +24,7 @@ Xcode version, update the selection to a supported newer version.
 ## One-time GitHub setup
 
 1. In Expo, create a [personal access token](https://docs.expo.dev/accounts/programmatic-access/#personal-access-tokens)
-   for a user with access to the `drasolabs/sevens` project and its credentials.
+   for a user with access to the `drasolabs/cardroom` project and its credentials.
    Treat it like a password; never commit it or paste it into an issue/chat.
 2. In GitHub, open **Settings → Environments**, create **testflight**, and restrict
    its deployment branches to the selected branch `dev`. Do not require manual
@@ -44,10 +44,12 @@ on your repository visibility and GitHub plan.
 
 ## Expo and Apple configuration
 
-- Expo project: `@drasolabs/sevens`, project ID
-  `cf266b75-da16-4843-bea0-25bd563f9daa`.
-- iOS bundle ID: `com.drasolabs.sevens`.
-- App Store Connect Apple ID: `6826725191` (`submit.production.ios.ascAppId`).
+- Expo project: `@drasolabs/cardroom`, project ID
+  `6beddb09-a647-4179-820b-b79513017133`.
+- iOS bundle ID (and Android package): `com.drasolabs.cardroom`.
+- App Store Connect Apple ID: `6829304218`
+  (`submit.production.ios.ascAppId` in `app/eas.json`). The old Sevens record
+  is not compatible with the new bundle ID.
 - `production` uses store distribution and Expo-managed remote signing credentials.
 - `cli.appVersionSource` is `remote` and `production.autoIncrement` is enabled:
   EAS maintains/increments the iOS build number, including for local builds.
@@ -62,6 +64,48 @@ fresh temporary copy, so `eas-build-pre-install` also installs/builds `../librar
 inside that copy. Merely building ignored `library/dist` on the outer runner
 would not be sufficient. Checkout initializes public submodules recursively at
 their committed revisions; it does not follow the submodule's latest `dev` tip.
+
+## Card Room identity migration
+
+The public store name is **Card Room by Draso Labs**; the installed label is
+**Card Room**. The URL scheme is now `drasolabscardroom://`. The app is linked to
+the new Expo project with slug `cardroom`, not the old Sevens project.
+Configure signing credentials, the submission API key, and any project-scoped
+environment variables/integrations for this new project; they do not automatically
+transfer from the old project. Ensure the CI Expo token can access the new project.
+
+Before merging/deploying this migration:
+
+1. Register `com.drasolabs.cardroom` as an explicit App ID in Apple Developer.
+2. Create a new App Store Connect app record for that bundle ID. An existing
+   record with uploaded Sevens builds cannot be switched to the new bundle ID.
+3. Copy the new numeric Apple ID into `submit.production.ios.ascAppId` in
+   `app/eas.json`. Run `npm run check:submission` from `app`. CI intentionally
+   fails before building if the ID is missing or still points to the old record.
+   This local check validates configuration only; confirm in App Store Connect
+   that the ID actually belongs to the new bundle ID.
+4. Run `npx eas-cli@25.3.0 credentials --platform ios` from `app` and configure
+   signing for the new bundle ID. Confirm EAS Submit's API key can access the
+   new app record. Existing distribution certificates may be reused, but the
+   provisioning profile must cover the new App ID.
+5. Complete the new record's beta/compliance information and recreate testing
+   groups/tester access. The numeric Apple ID and testing setup do not migrate.
+6. Build fresh development clients for iOS and Android. Native folders are
+   ignored/generated; existing local `app/ios` and `app/android` may still use
+   the old identity. Review/back up any manual native changes, then regenerate
+   with `npx expo prebuild --clean` before running the native builds. Do not
+   regenerate blindly if those folders contain changes you need to preserve.
+7. Verify the installed name, deep links, LAN discovery, and multiplayer. Old
+   and new identities install side by side; app-local saves/settings do not
+   automatically transfer. A JavaScript-only update cannot perform this rename.
+
+For Android, check signing credentials for the new package using
+`npx eas-cli@25.3.0 credentials --platform android`. If a Play Console app already
+exists for the old package, create a new app record; package names cannot be
+changed on an existing listing. Android deployment is not part of this CI.
+
+The app icon depicts four suits around a shared round table, with matching splash
+and Android assets. The game engine, LAN metadata, and storage keys are not renamed.
 
 ## First deployment
 
@@ -90,7 +134,7 @@ rebuilding:
 
 ```sh
 # From app, after downloading/extracting the artifact:
-npx eas-cli@25.3.0 submit --platform ios --profile production --no-auto-testflight-setup --path /path/to/sevens.ipa
+npx eas-cli@25.3.0 submit --platform ios --profile production --no-auto-testflight-setup --path /path/to/cardroom.ipa
 ```
 
 Do not re-upload an already accepted build with the same version/build number.
