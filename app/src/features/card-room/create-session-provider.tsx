@@ -193,9 +193,8 @@ export function createSessionProvider<S extends StateBase, E, A extends E, P ext
       try { event = spec.botEvent(state); } catch (cause) { setError(message(cause)); return; }
       if (!event) return;
       botRevision.current = next.revision; botRunning.current = true;
-      // A small pause lets humans follow each trick instead of bots consuming it instantly.
       const revision = next.revision;
-      void new Promise<void>((resolve) => setTimeout(resolve, 500)).then(async () => {
+      void Promise.resolve().then(async () => {
         if (!mounted.current || session.current !== current || current.snapshot.status !== 'connected' || current.snapshot.role !== 'host' || current.snapshot.revision !== revision) {
           if (botRevision.current === revision) botRevision.current = null;
           return;
