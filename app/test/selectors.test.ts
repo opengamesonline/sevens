@@ -21,6 +21,7 @@ import {
   selectOwnHand,
   selectPlayableCards,
   selectSuitRuns,
+  selectTablePlayers,
 } from '../src/features/sevens/selectors';
 import {
   createSevensParticipantMetadata,
@@ -113,6 +114,17 @@ test('spectator selector exposes no hand and counts every seated player', () => 
     ['spades', 'diamonds', 'clubs', 'hearts'],
   );
   assert.equal(suitRuns.every(({ cards }) => cards.length === 0), true);
+});
+
+test('table strip includes the local player, current turn and disconnected seats', () => {
+  const current = snapshot(0);
+  const players = selectTablePlayers({ ...current, connectedParticipantIds: ['alice', 'carol', 'watcher'] });
+  assert.equal(players.length, 3);
+  assert.equal(players.find((player) => player.id === 'alice')!.isSelf, true);
+  assert.equal(players.find((player) => player.id === game.currentPlayerId)!.isCurrentPlayer, true);
+  assert.equal(players.find((player) => player.id === 'bob')!.offline, true);
+  assert.ok(selectTablePlayers(snapshot(3)).every((player) => !player.isSelf));
+  assert.ok(players.every((player) => !('hand' in player)));
 });
 
 test('selectors include bot names without exposing a bot as the local hand', () => {

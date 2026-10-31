@@ -10,6 +10,8 @@ export type RoomPolicy<S, E, P extends JsonValue, L extends JsonValue> = CreateG
   removeBot(id: string): boolean;
 };
 export type SessionSpec<S extends StateBase, E, P extends JsonValue & ParticipantBase, L extends JsonValue & LobbyBase, O> = {
+  gameType: string;
+  isCreateOptions(value: unknown): value is O;
   storageKey: string;
   isParticipant(value: unknown): value is P;
   isLobby(value: unknown): value is L;

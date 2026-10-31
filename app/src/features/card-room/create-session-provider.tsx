@@ -31,6 +31,7 @@ export function createSessionProvider<S extends StateBase, E, A extends E, P ext
 
   function Provider({ children, enabled = true }: { children: ReactNode; enabled?: boolean }) {
     const room = useCardRoom();
+    const { setSessionReady } = room;
     const transport = useRef<LanMultiplayer<P, L> | null>(null);
     const session = useRef<Session | null>(null);
     const policy = useRef<Policy | null>(null);
@@ -43,6 +44,7 @@ export function createSessionProvider<S extends StateBase, E, A extends E, P ext
     const botRunning = useRef(false);
     const botRevision = useRef<number | null>(null);
     const starting = useRef(false);
+    const creating = useRef(false);
     const ending = useRef(false);
     const persistence = useRef<Promise<void>>(Promise.resolve());
     const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
@@ -50,6 +52,7 @@ export function createSessionProvider<S extends StateBase, E, A extends E, P ext
     const [sending, setSending] = useState(false);
     const [reconnecting, setReconnecting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [initialized, setInitialized] = useState(false);
     const recoverEvent = useEffectEvent(recover);
     const restoreEvent = useEffectEvent(restore);
     const pendingJoinEvent = useEffectEvent(async () => {
@@ -60,10 +63,27 @@ export function createSessionProvider<S extends StateBase, E, A extends E, P ext
       router.replace('/session');
       await join({ ...pending, game: { ...pending.game, lobbyMetadata: pending.game.lobbyMetadata } });
     });
+    const pendingCreateEvent = useEffectEvent(async () => {
+      const pending = room.pendingCreate;
+      if (!pending || pending.gameType !== spec.gameType || creating.current) return;
+      creating.current = true;
+      try {
+        if (!spec.isCreateOptions(pending.options)) {
+          setError('Invalid room options');
+          return;
+        }
+        if (await create(pending.options)) pending.onCreated();
+      } finally {
+        creating.current = false;
+        room.consumeCreate();
+      }
+    });
 
     useEffect(() => {
       if (!enabled) return;
       mounted.current = true;
+      setSessionReady(false);
+      setInitialized(false);
       setBusy(true); setError(null); setSnapshot(null);
       const multiplayer = new LanMultiplayer<P, L>();
       transport.current = multiplayer;
@@ -84,6 +104,7 @@ export function createSessionProvider<S extends StateBase, E, A extends E, P ext
       }, 2_000);
       return () => {
         mounted.current = false;
+        setInitialized(false);
         // This ref is an operation counter, not a DOM/native element.
         // eslint-disable-next-line react-hooks/exhaustive-deps
         generation.current++;
@@ -92,9 +113,10 @@ export function createSessionProvider<S extends StateBase, E, A extends E, P ext
         transport.current = null;
         void multiplayer.dispose({ preserveSession: true }).catch(() => undefined);
       };
-    }, [enabled]);
+    }, [enabled, setSessionReady]);
 
     useEffect(() => { if (enabled && room.pendingJoin) void pendingJoinEvent(); }, [enabled, room.pendingJoin]);
+    useEffect(() => { if (enabled && initialized && room.pendingCreate) void pendingCreateEvent(); }, [enabled, initialized, room.pendingCreate]);
 
     function persist(current: Session) {
       const selfParticipantId = current.snapshot.self?.id;
@@ -112,7 +134,7 @@ export function createSessionProvider<S extends StateBase, E, A extends E, P ext
       let restored = false;
       try {
         const raw = await AsyncStorage.getItem(spec.storageKey);
-        if (!raw || !mounted.current || transport.current !== multiplayer || room.pendingJoin) return;
+        if (!raw || !mounted.current || transport.current !== multiplayer || room.pendingJoin || room.pendingCreate) return;
         const saved: unknown = JSON.parse(raw);
         if (!validSaved(saved)) { await clearSaved(); return; }
         const options = spec.restorePolicy(saved.recovery, saved.selfParticipantId);
@@ -121,7 +143,7 @@ export function createSessionProvider<S extends StateBase, E, A extends E, P ext
       } catch (cause) {
         if (!restored) await clearSaved().catch(() => undefined);
         if (mounted.current) setError(message(cause));
-      } finally { if (mounted.current) setBusy(false); }
+      } finally { if (mounted.current && transport.current === multiplayer) { setBusy(false); setInitialized(true); room.setSessionReady(true); } }
     }
     async function recover(current: Session) {
       const multiplayer = transport.current;
@@ -198,7 +220,10 @@ export function createSessionProvider<S extends StateBase, E, A extends E, P ext
     }
     async function create(options: O) {
       const multiplayer = transport.current;
-      if (!multiplayer || session.current) return false;
+      if (!multiplayer || session.current) {
+        setError(session.current ? 'Leave the current room before creating another' : 'The room is not ready yet');
+        return false;
+      }
       const attempt = ++generation.current;
       room.clearError();
       setBusy(true); setError(null);

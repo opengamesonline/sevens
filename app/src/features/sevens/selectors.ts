@@ -1,4 +1,5 @@
 import { GameStatus, Suit, getPlayableCards, type Card } from '@opengamesonline/sevens';
+import type { TablePlayer } from '@/components/room/player-strip';
 
 import type { SevensSessionSnapshot } from './types';
 
@@ -98,6 +99,20 @@ export function selectOpponents(
       cardCount: hand.length,
       isCurrentPlayer: id === snapshot.state?.currentPlayerId,
     }));
+}
+
+export function selectTablePlayers(snapshot: SevensSessionSnapshot | null): readonly TablePlayer[] {
+  const game = snapshot?.state;
+  if (!snapshot || !game) return [];
+  const names = selectParticipantNames(snapshot);
+  const selfId = snapshot.self?.id;
+  return game.players.map((player) => ({
+    id: player.id, name: names[player.id] ?? 'Left table', cardCount: player.hand.length,
+    isSelf: snapshot.self?.metadata.role === 'player' && player.id === selfId,
+    isCurrentPlayer: player.id === game.currentPlayerId,
+    offline: !game.bots.some((bot) => bot.id === player.id) &&
+      (player.id === selfId ? snapshot.status !== 'connected' : !snapshot.connectedParticipantIds.includes(player.id)),
+  }));
 }
 
 export function selectPlayableCards(

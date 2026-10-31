@@ -5,6 +5,12 @@ import { isHeartsGameState, isHeartsLobbyMetadata, isHeartsParticipantMetadata }
 import type { HeartsGameState, HeartsGameEvent, HeartsParticipantMetadata, HeartsLobbyMetadata } from './types';
 
 const session = createSessionProvider<HeartsGameState, HeartsGameEvent, HeartsAction, HeartsParticipantMetadata, HeartsLobbyMetadata, CreateHeartsPolicyOptions>({
+  gameType: 'hearts',
+  isCreateOptions(value): value is CreateHeartsPolicyOptions {
+    if (!value || typeof value !== 'object') return false;
+    const v = value as Record<string, unknown>;
+    return typeof v.gameName === 'string' && typeof v.participantName === 'string' && (v.role === 'player' || v.role === 'spectator');
+  },
   storageKey: 'hearts.active-table.v1',
   isParticipant: isHeartsParticipantMetadata, isLobby: isHeartsLobbyMetadata, isState: isHeartsGameState,
   stateMatchesLobby: () => true,

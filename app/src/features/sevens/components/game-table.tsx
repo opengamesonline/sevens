@@ -12,7 +12,9 @@ import { useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { cardKey, PlayingCard, suitGlyph } from '@/components/cards/playing-card';
+import { CardHand } from '@/components/cards/card-hand';
 import { cardLabel, gainedCards, placedCards } from '@/components/cards/card-text';
+import { PlayerStrip } from '@/components/room/player-strip';
 import { RoomButton, RoomPanel } from '@/components/room/room-ui';
 import { GameCardSize, GameColors } from '@/constants/theme';
 import {
@@ -22,7 +24,6 @@ import {
   sortFinalScores,
 } from '@/features/sevens/presentation';
 import {
-  selectOpponents,
   selectOwnHand,
   selectParticipantName,
   selectPlayableCards,
@@ -30,6 +31,7 @@ import {
   type SevensGameState,
   type SevensSessionSnapshot,
 } from '@/features/sevens';
+import { selectTablePlayers } from '../selectors';
 
 const handSuitOrder: Record<Suit, number> = {
   [Suit.Spades]: 0,
@@ -95,7 +97,6 @@ export function GameTable({
 }) {
   const game = snapshot.state;
   const [selection, setSelection] = useState<{ card: Card; revision: number } | null>(null);
-  const [handWidth, setHandWidth] = useState(0);
   const [boardWidth, setBoardWidth] = useState(0);
   const [drawConfirmation, setDrawConfirmation] = useState<{ revision: number } | null>(null);
   const [leaveConfirming, setLeaveConfirming] = useState(false);
@@ -118,10 +119,10 @@ export function GameTable({
   const hand = selectOwnHand(snapshot);
   const playableCards = selectPlayableCards(snapshot);
   const playableKeys = new Set(playableCards.map(cardKey));
-  const opponents = selectOpponents(snapshot);
   const suitRuns = selectSuitRuns(snapshot);
   const selfId = snapshot.self?.id ?? null;
   const isPlayer = snapshot.self?.metadata.role === 'player';
+  const tablePlayers = selectTablePlayers(snapshot);
   const showPlayableCards = snapshot.lobbyMetadata?.showPlayableCards ?? false;
   const preventIllegalDraw = snapshot.lobbyMetadata?.preventIllegalDraw ?? false;
   const isCurrentPlayer = isPlayer && game.currentPlayerId === selfId;
@@ -282,28 +283,6 @@ export function GameTable({
         },
       )
     : [];
-  const handCardWidth = GameCardSize.compactWidth * 2;
-  const cardsPerHandRow = handWidth
-    ? Math.max(1, Math.min(10, Math.floor((handWidth - handCardWidth) / 25) + 1))
-    : 8;
-  const handRows = Array.from(
-    { length: Math.ceil(sortedHand.length / cardsPerHandRow) },
-    (_, index) =>
-      sortedHand.slice(
-        index * cardsPerHandRow,
-        (index + 1) * cardsPerHandRow,
-      ),
-  );
-  const handCardStep =
-    cardsPerHandRow > 1 && handWidth > 0
-      ? Math.max(
-          0,
-          Math.min(
-            handCardWidth + 8,
-            (handWidth - handCardWidth) / (cardsPerHandRow - 1),
-          ),
-        )
-      : 0;
   const boardStep =
     boardWidth > 0
       ? Math.max(
@@ -420,28 +399,7 @@ export function GameTable({
         </RoomPanel>
       ) : (
         <>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.opponents}
-          >
-            {opponents.map((opponent) => (
-              <View
-                key={opponent.id}
-                style={[styles.opponent, opponent.isCurrentPlayer && styles.currentOpponent]}
-              >
-                <View style={styles.cardBack}>
-                  <Text style={styles.cardBackMark}>7</Text>
-                </View>
-                <View>
-                  <Text style={styles.opponentName}>{opponent.name}</Text>
-                  <Text style={styles.opponentCount}>
-                    {opponent.cardCount} {opponent.cardCount === 1 ? 'card' : 'cards'}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </ScrollView>
+          <PlayerStrip players={tablePlayers} mark="7" />
 
           <RoomPanel style={styles.boardPanel}>
             <View
@@ -586,49 +544,20 @@ export function GameTable({
               <Text style={styles.logPreviewChevron}>▸</Text>
             </Pressable>
           ) : null}
-          <View
-            style={styles.hand}
-            onLayout={({ nativeEvent }) => setHandWidth(nativeEvent.layout.width)}
-          >
-            {handRows.map((row) => {
-              const rowWidth = handCardWidth + handCardStep * (row.length - 1);
-
-              return (
-                <View
-                  key={cardKey(row[0]!)}
-                  style={[styles.handRow, { width: Math.max(handCardWidth, rowWidth) }]}
-                >
-                  {row.map((card, index) => {
-                    const selected = selectedCard ? cardEquals(card, selectedCard) : false;
-                    const selectable =
-                      !actionPending &&
-                      (isDonor || (isCurrentPlayer && game.pendingDraw === null));
-                    return (
-                      <View
-                        key={cardKey(card)}
-                        style={[styles.overlappingHandCard, { left: handCardStep * index }]}
-                      >
-                        <PlayingCard
-                          card={card}
-                          handSize
-                          selected={selected}
-                          selectable={selectable}
-                          playable={shouldPresentCardAsPlayable(
-                            showPlayableCards,
-                            isDonor,
-                            playableKeys.has(cardKey(card)),
-                          )}
-                          onPress={() => {
-                            setSelection(selected ? null : { card, revision: snapshot.revision });
-                          }}
-                        />
-                      </View>
-                    );
-                  })}
-                </View>
-              );
-            })}
-          </View>
+          <CardHand cards={sortedHand} renderCard={(card) => {
+            const selected = selectedCard ? cardEquals(card, selectedCard) : false;
+            const selectable = !actionPending && (isDonor || (isCurrentPlayer && game.pendingDraw === null));
+            return (
+              <PlayingCard
+                card={card}
+                handSize
+                selected={selected}
+                selectable={selectable}
+                playable={shouldPresentCardAsPlayable(showPlayableCards, isDonor, playableKeys.has(cardKey(card)))}
+                onPress={() => setSelection(selected ? null : { card, revision: snapshot.revision })}
+              />
+            );
+          }} />
         </View>
       ) : (
         <View style={styles.spectatorNote}>
@@ -819,32 +748,6 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   alertText: { color: '#FFD8D2', lineHeight: 20 },
-  opponents: { gap: 9, paddingVertical: 2 },
-  opponent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 9,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: GameColors.border,
-    padding: 9,
-    minWidth: 144,
-    backgroundColor: 'rgba(0,0,0,0.13)',
-  },
-  currentOpponent: { borderColor: GameColors.gold, backgroundColor: 'rgba(215,174,90,0.1)' },
-  cardBack: {
-    width: 30,
-    height: 42,
-    borderRadius: 5,
-    borderWidth: 2,
-    borderColor: GameColors.creamMuted,
-    backgroundColor: GameColors.red,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardBackMark: { color: GameColors.cream, fontWeight: '900' },
-  opponentName: { color: GameColors.white, fontSize: 14, fontWeight: '700' },
-  opponentCount: { color: GameColors.whiteMuted, fontSize: 12, marginTop: 2 },
   boardPanel: { paddingHorizontal: 13 },
   resultsPanel: { gap: 18 },
   resultsHeading: { gap: 3 },
@@ -948,18 +851,6 @@ const styles = StyleSheet.create({
   handSection: { gap: 9 },
   handHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   handCount: { color: GameColors.whiteMuted, fontSize: 12 },
-  hand: {
-    alignItems: 'center',
-    gap: 8,
-    paddingTop: 9,
-    paddingBottom: 5,
-  },
-  handRow: {
-    position: 'relative',
-    alignSelf: 'flex-start',
-    height: GameCardSize.compactHeight * 2,
-  },
-  overlappingHandCard: { position: 'absolute', top: 0 },
   spectatorNote: {
     alignItems: 'center',
     borderRadius: 14,

@@ -2,9 +2,10 @@ import { LanMultiplayer } from '@opengamesonline/expo-lan-multiplayer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppState } from 'react-native';
-import { isRoomLobby, roomGameType, type DiscoveredRoom, type GameType, type RoomLobby } from './registry';
+import { isGameType, isRoomLobby, roomGameType, type DiscoveredRoom, type GameOptions, type GameType, type RoomLobby } from './registry';
 
 export type PendingJoin = { game: DiscoveredRoom; participantName: string; role: 'player' | 'spectator' };
+export type PendingCreate<K extends GameType = GameType> = { gameType: K; options: GameOptions<K>; onCreated(): void };
 type RoomContext = {
   ready: boolean; gameType: GameType; selectGame(game: GameType): Promise<void>;
   username: string; setUsername(value: string): void;
@@ -12,7 +13,9 @@ type RoomContext = {
   clearError(): void;
   discover(): Promise<boolean>; refresh(): Promise<void>; stop(): Promise<void>;
   requestJoin(options: PendingJoin): Promise<void>; pendingJoin: PendingJoin | null; consumeJoin(): void;
+  requestCreate<K extends GameType>(options: PendingCreate<K>): Promise<void>; pendingCreate: PendingCreate | null; consumeCreate(): void;
   setHasSession(value: boolean): void;
+  sessionReady: boolean; setSessionReady(value: boolean): void;
 };
 const Context = createContext<RoomContext | null>(null);
 const SELECTION_KEY = 'cardroom.selected-game.v1';
@@ -25,6 +28,8 @@ export function CardRoomProvider({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingJoin, setPendingJoin] = useState<PendingJoin | null>(null);
+  const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
+  const [sessionReady, setSessionReady] = useState(false);
   const multiplayer = useRef<LanMultiplayer<null, RoomLobby> | null>(null);
   const activeSession = useRef(false);
   const generation = useRef(0);
@@ -39,7 +44,7 @@ export function CardRoomProvider({ children }: { children: ReactNode }) {
       if (state === 'background') { generation.current++; void transport.stopDiscovery().catch(() => undefined); }
     });
     void AsyncStorage.getItem(SELECTION_KEY).then((saved) => {
-      if (mounted && (saved === 'sevens' || saved === 'hearts')) setGameType(saved);
+      if (mounted && isGameType(saved)) setGameType(saved);
     }).catch(() => undefined).finally(() => { if (mounted) setReady(true); });
     return () => {
       mounted = false;
@@ -81,8 +86,21 @@ export function CardRoomProvider({ children }: { children: ReactNode }) {
     setPendingJoin(options);
     setGameType(type);
   }
+  async function requestCreate<K extends GameType>(options: PendingCreate<K>) {
+    if (activeSession.current) throw new Error('Leave the current room before creating another');
+    if (!sessionReady) throw new Error('The room is not ready yet');
+    setBusy(true);
+    try {
+      await stop();
+      await AsyncStorage.setItem(SELECTION_KEY, options.gameType);
+      setError(null);
+      setPendingCreate(options);
+      setGameType(options.gameType);
+    } finally { setBusy(false); }
+  }
   return <Context.Provider value={{ ready, gameType, selectGame, username, setUsername, games, busy, error, clearError: () => setError(null), discover, refresh, stop,
-    requestJoin, pendingJoin, consumeJoin: () => setPendingJoin(null), setHasSession: (value) => { activeSession.current = value; } }}>{children}</Context.Provider>;
+    requestJoin, pendingJoin, consumeJoin: () => setPendingJoin(null), requestCreate, pendingCreate, consumeCreate: () => setPendingCreate(null),
+    sessionReady, setSessionReady, setHasSession: (value) => { activeSession.current = value; } }}>{children}</Context.Provider>;
 }
 export function useCardRoom() {
   const value = useContext(Context);

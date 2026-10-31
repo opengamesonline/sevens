@@ -1,10 +1,18 @@
-import { createBotStrategy, type TurnAction } from '@opengamesonline/sevens';
+import { createBotStrategy, SevensVariant, type TurnAction } from '@opengamesonline/sevens';
 import { createSessionProvider } from '../card-room/create-session-provider';
 import { createSevensParticipantMetadata, createSevensPolicy, type CreateSevensPolicyOptions } from './sevens-policy';
 import { isSevensGameState, isSevensLobbyMetadata, isSevensParticipantMetadata } from './validation';
 import { SEVENS_BOT_TURN_EVENT, type SevensGameState, type SevensGameEvent, type SevensParticipantMetadata, type SevensLobbyMetadata, type SevensDiscoveredGame } from './types';
 
 const session = createSessionProvider<SevensGameState, SevensGameEvent, TurnAction, SevensParticipantMetadata, SevensLobbyMetadata, CreateSevensPolicyOptions>({
+  gameType: 'sevens',
+  isCreateOptions(value): value is CreateSevensPolicyOptions {
+    if (!value || typeof value !== 'object') return false;
+    const v = value as Record<string, unknown>;
+    return typeof v.gameName === 'string' && typeof v.participantName === 'string' && (v.role === 'player' || v.role === 'spectator') &&
+      typeof v.maxPlayers === 'number' && typeof v.showPlayableCards === 'boolean' && typeof v.preventIllegalDraw === 'boolean' &&
+      (v.variant === SevensVariant.Standard || v.variant === SevensVariant.Joker);
+  },
   storageKey: 'sevens.active-table.v1',
   isParticipant: isSevensParticipantMetadata, isLobby: isSevensLobbyMetadata, isState: isSevensGameState,
   stateMatchesLobby: (state, lobby) => state.variant === lobby.variant,

@@ -6,7 +6,7 @@ import { createHeartsParticipantMetadata, createHeartsPolicy, type HeartsPolicy 
 import { isHeartsAction, isHeartsGameState, isHeartsLobbyMetadata, isHeartsParticipantMetadata } from '../src/features/hearts/validation';
 import type { HeartsGameEvent, HeartsGameState, HeartsLobbyMetadata, HeartsParticipantMetadata } from '../src/features/hearts/types';
 import { createSevensParticipantMetadata, createSevensPolicy } from '../src/features/sevens/sevens-policy';
-import { filterRooms, roomGameType } from '../src/features/card-room/registry';
+import { defineRoomGames, filterRooms, findRoomGame, GAME_INFO, GAME_TYPES, isGameType, roomDetail, roomGameType } from '../src/features/card-room/registry';
 import { createRecoveryValidator } from '../src/features/card-room/recovery';
 
 const participant = (id: string, role: 'player' | 'spectator', slot: number): Participant<HeartsParticipantMetadata> =>
@@ -87,11 +87,27 @@ test('room registry identifies both games and rejects incompatible versions', ()
   assert.equal(roomGameType({ ...sevens, gameVersion: 999 }), null);
   assert.equal(roomGameType({ ...hearts, appId: 'com.example.other' }), null);
   assert.equal(roomGameType(null), null);
+  assert.deepEqual(GAME_TYPES, ['sevens', 'hearts']);
+  assert.equal(isGameType('hearts'), true);
+  assert.equal(isGameType('unknown'), false);
+  assert.match(roomDetail(sevens), /SEVENS/);
+  assert.match(roomDetail(hearts), /HEARTS/);
   const rooms = [{ name: 'Family Sevens', lobbyMetadata: sevens }, { name: 'Family Hearts', lobbyMetadata: hearts }, { name: 'Other Hearts', lobbyMetadata: hearts }];
   assert.equal(filterRooms(rooms, 'all').length, 3);
   assert.deepEqual(filterRooms(rooms, 'hearts', ' FAMILY ').map((r) => r.name), ['Family Hearts']);
   assert.deepEqual(filterRooms(rooms, 'sevens', 'hearts'), []);
   assert.equal(rooms.length, 3);
+});
+
+test('room registry can identify an additional registered game without changing dispatch', () => {
+  type OtherLobby = { appId: 'other'; gameVersion: 1 };
+  const games = defineRoomGames({ ...GAME_INFO, other: {
+    name: 'Other', mark: 'O', description: 'Another game', players: '2 players',
+    isLobby: (value: unknown): value is OtherLobby => Boolean(value && typeof value === 'object' && 'appId' in value && value.appId === 'other' && 'gameVersion' in value && value.gameVersion === 1),
+    roomDetail: (_lobby: OtherLobby) => 'OTHER',
+  } });
+  assert.equal(findRoomGame(games, { appId: 'other', gameVersion: 1 }), 'other');
+  assert.equal(findRoomGame(games, { appId: 'other', gameVersion: 2 }), null);
 });
 
 test('malformed actions, duplicate cards, and invalid game snapshots are rejected', () => {

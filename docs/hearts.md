@@ -47,6 +47,20 @@ Only the selected game's session provider starts a transport/recovery process;
 inactive contexts remain mounted to avoid resetting navigation. A separate shared browser
 discovers both games; a game is fixed when its room is created.
 
+Room creation is shared. The game picker changes only the draft; the selected
+provider is activated when creation is submitted, after the current provider has
+finished checking recovery. A pending creation suppresses recovery of the newly
+selected game's old table while its provider initializes.
+
+To add a game, register its metadata, typed creation options, lobby validator,
+and browser summary with `defineRoomGame` / `defineRoomGames` in
+`app/src/features/card-room/registry.ts`. Add its provider, creation-options
+component, and session screen to `GAME_ADAPTERS` in `game-adapters.tsx`; the
+shared picker, browser, provider mounting, and session route iterate those
+registrations. Use `createSessionProvider` with the game's own protocol policy,
+recovery validators, and bot adapter. The settings component can render no
+additional options, as Hearts does.
+
 Sevens retains protocol ID `com.opengamesonline.sevens` / version 4 and its
 `sevens.active-table.v1` recovery key. Hearts uses
 `com.drasolabs.cardroom.hearts` / version 1 and `hearts.active-table.v1`.
@@ -86,12 +100,16 @@ authorization, room filters, and recovery/host-policy reconstruction.
 These need real iOS/Android development clients or release builds; bundle export
 and engine tests do not exercise native networking or touch interactions.
 
-1. Create one Sevens and one Hearts room on different devices. Verify the shared
-   browser sees both, filters/search work, and joining selects the correct game.
+1. Use the same create-room sheet for both games. Switch the draft selection and
+   verify only Sevens shows its variant, seat and hint settings; verify switching
+   the draft does not restore a saved table for the other game. Create one Sevens
+   and one Hearts room on different devices. Verify the shared browser sees both,
+   filters/search work, and joining selects the correct game.
 2. Fill a Hearts room with four humans, then with a mix of humans and both bot
    strategies. Confirm a fifth player is rejected but spectators can join the lobby.
-3. Select/pass three cards, confirm waits for all players, then check the 2♣ lead,
-   turn order, legal-play highlighting, trick display and scoring.
+3. Select/pass three cards, confirm the player strip shows submission readiness
+   (not a turn) until all players pass, then check the highlighted turn, 2♣ lead,
+   card counts, legal-play highlighting, trick display and scoring.
 4. Test a spectator host with four bots, hand transitions, moon scoring, and a
    full match. Check the fresh-match reset after returning to the lobby.
 5. Background/relaunch during passing and mid-trick. Disconnect a player and

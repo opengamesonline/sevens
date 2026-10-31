@@ -1,4 +1,3 @@
-import { SevensVariant } from '@opengamesonline/sevens';
 import { router } from 'expo-router';
 import { useEffect, useEffectEvent, useState } from 'react';
 import {
@@ -24,7 +23,7 @@ import {
 } from '@/components/room/room-ui';
 import { GameColors } from '@/constants/theme';
 import { useCardRoom } from '@/features/card-room/room-provider';
-import { filterRooms, GAME_INFO, roomGameType, type DiscoveredRoom, type GameType } from '@/features/card-room/registry';
+import { filterRooms, GAME_INFO, GAME_TYPES, roomDetail, roomGameType, type DiscoveredRoom, type GameType } from '@/features/card-room/registry';
 
 export default function GamesScreen() {
   const insets = useSafeAreaInsets();
@@ -89,7 +88,7 @@ export default function GamesScreen() {
     <RoomScreen>
       <BrandHeader eyebrow="LOCAL TABLES" title="Nearby Games" />
       <ErrorBanner message={error} />
-      <View style={styles.filters}>{(['all', 'sevens', 'hearts'] as const).map((type) => (
+      <View style={styles.filters}>{(['all', ...GAME_TYPES] as const).map((type) => (
         <Pressable key={type} accessibilityRole="button" accessibilityState={{ selected: type === filter }} onPress={() => setFilter(type)}>
           <Text style={[styles.filter, type === filter && styles.selectedFilter]}>{type === 'all' ? 'All games' : GAME_INFO[type].name}</Text>
         </Pressable>
@@ -130,8 +129,7 @@ export default function GamesScreen() {
                         {game.lobbyMetadata.spectatorCount} WATCHING
                       </Text>
                       <Text style={styles.hintMeta}>
-                        {roomGameType(game.lobbyMetadata) === 'hearts' ? 'HEARTS · FIRST TO 100 ENDS THE MATCH' :
-                          `SEVENS · ${'variant' in game.lobbyMetadata && game.lobbyMetadata.variant === SevensVariant.Joker ? 'JOKER' : 'STANDARD'}`}
+                        {roomDetail(game.lobbyMetadata)}
                       </Text>
                     </View>
                     <Text style={styles.joinText}>{full ? 'WATCH' : 'JOIN'}</Text>
@@ -190,7 +188,7 @@ export default function GamesScreen() {
 }
 
 const styles = StyleSheet.create({
-  filters: { flexDirection: 'row', gap: 14 },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
   filter: { color: GameColors.whiteMuted, paddingVertical: 10, fontWeight: '700' },
   selectedFilter: { color: GameColors.gold },
   listHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },

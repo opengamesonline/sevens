@@ -1,8 +1,8 @@
-import SevensSession from '@/features/sevens/session-screen';
-import HeartsSession from '@/features/hearts/session-screen';
+import { GAME_ADAPTERS } from '@/features/card-room/game-adapters';
 import { useCardRoom } from '@/features/card-room/room-provider';
 
 export default function SessionScreen() {
   const { gameType } = useCardRoom();
-  return gameType === 'sevens' ? <SevensSession /> : <HeartsSession />;
+  const Session = GAME_ADAPTERS[gameType].Session;
+  return <Session />;
 }
