@@ -1,4 +1,13 @@
-# Sevens App
+# Card Room by Draso Labs
+
+The installed app is named **Card Room**, with native identifier
+`com.drasolabs.cardroom` on iOS and Android. Sevens is the first supported game;
+the Sevens engine package and multiplayer protocol retain their game-specific names.
+
+The app is linked to the new Expo project `@drasolabs/cardroom`
+(`6beddb09-a647-4179-820b-b79513017133`).
+See [the identity migration checklist](../docs/ios-deployment.md#card-room-identity-migration)
+before deploying. Apple submissions target the new Card Room record (`6829304218`).
 
 ## Branding
 

@@ -7,16 +7,18 @@ const sharp = require('sharp');
 const root = path.resolve(__dirname, '..');
 const imagePath = (name) => path.join(root, 'assets/images', name);
 
-test('full-color exports use black-suit ink without the old red diamond', async () => {
+test('full-color exports include both black and red suit ink', async () => {
   for (const name of ['icon.png', 'android-icon-foreground.png', 'splash-icon.png', 'favicon.png']) {
     const { data, info } = await sharp(imagePath(name)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     let blackSuitPixels = 0;
+    let redSuitPixels = 0;
     for (let i = 0; i < data.length; i += info.channels) {
       if (data[i + 3] === 0) continue;
       if (data[i] === 32 && data[i + 1] === 37 && data[i + 2] === 34) blackSuitPixels++;
-      assert.ok(!(data[i] === 182 && data[i + 1] === 59 && data[i + 2] === 63), `${name}: old red suit remains`);
+      if (data[i] === 182 && data[i + 1] === 59 && data[i + 2] === 63) redSuitPixels++;
     }
     assert.ok(blackSuitPixels > 0, `${name}: black-suit ink is missing`);
+    assert.ok(redSuitPixels > 0, `${name}: red-suit ink is missing`);
   }
 });
 

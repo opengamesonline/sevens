@@ -35,7 +35,7 @@ async function main() {
     console.log(`Generated ${name} (${size}×${size})`);
   }
   // Icon Composer uses the same vector artwork, not a flattened PNG.
-  await fs.writeFile(path.join(root, 'assets/expo.icon/Assets/sevens.svg'), svgDocument(mark, '', 1.15));
+  await fs.writeFile(path.join(root, 'assets/expo.icon/Assets/cardroom.svg'), svgDocument(mark, '', 1.15));
 }
 
 main().catch((error) => {

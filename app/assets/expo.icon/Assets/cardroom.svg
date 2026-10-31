@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+    
+    <g transform="translate(-76.79999999999995 -76.79999999999995) scale(1.15)">
+  <title>Card Room — four suits around a shared table</title>
+  <circle cx="512" cy="512" r="300" fill="#D7AE5A" stroke="#987637" stroke-width="10"/>
+  <circle cx="512" cy="512" r="272" fill="#0D5744"/>
+  <circle cx="512" cy="512" r="252" fill="none" stroke="#F6F0DF" stroke-opacity="0.16" stroke-width="3"/>
+  <g transform="rotate(-12 512 350)">
+    <rect x="444" y="258" width="136" height="184" rx="18" fill="#00130F" opacity="0.22" transform="translate(0 7)"/>
+    <rect x="444" y="258" width="136" height="184" rx="18" fill="#F6F0DF"/>
+    <path d="M512 314C504 328 480 340 480 356C480 374 500 382 508 368C508 378 504 386 498 390H526C520 386 516 378 516 368C524 382 544 374 544 356C544 340 520 328 512 314Z" fill="#202522"/>
+  </g>
+  <g transform="rotate(90 512 512)">
+    <g transform="rotate(-12 512 350)">
+      <rect x="444" y="258" width="136" height="184" rx="18" fill="#00130F" opacity="0.22" transform="translate(0 7)"/>
+      <rect x="444" y="258" width="136" height="184" rx="18" fill="#F6F0DF"/>
+      <path d="M512 386L484 358C454 326 492 300 512 326C532 300 570 326 540 358Z" fill="#B63B3F"/>
+    </g>
+  </g>
+  <g transform="rotate(180 512 512)">
+    <g transform="rotate(-12 512 350)" >
+      <rect x="444" y="258" width="136" height="184" rx="18" fill="#00130F" opacity="0.22" transform="translate(0 7)"/>
+      <rect x="444" y="258" width="136" height="184" rx="18" fill="#F6F0DF"/>
+      <path d="M512 320C488 320 488 345 499 350C472 336 462 374 485 380C496 383 505 376 508 368C508 378 504 386 498 390H526C520 386 516 378 516 368C519 376 528 383 539 380C562 374 552 336 525 350C536 345 536 320 512 320Z" fill="#202522"/>
+    </g>
+  </g>
+  <g transform="rotate(270 512 512)">
+    <g transform="rotate(-12 512 350)">
+      <rect x="444" y="258" width="136" height="184" rx="18" fill="#00130F" opacity="0.22" transform="translate(0 7)"/>
+      <rect x="444" y="258" width="136" height="184" rx="18" fill="#F6F0DF"/>
+      <path d="M512 312L542 350L512 388L482 350Z" fill="#B63B3F"/>
+    </g>
+  </g>
+</g>
+  </svg>

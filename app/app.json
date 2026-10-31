@@ -1,17 +1,17 @@
 {
   "expo": {
     "owner": "drasolabs",
-    "name": "Sevens",
-    "slug": "sevens",
+    "name": "Card Room",
+    "slug": "cardroom",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "sevens",
+    "scheme": "drasolabscardroom",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#042B23",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.drasolabs.sevens",
+      "bundleIdentifier": "com.drasolabs.cardroom",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocalNetworkUsageDescription": "Discover and connect to multiplayer games on your local network.",
@@ -28,7 +28,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.drasolabs.sevens"
+      "package": "com.drasolabs.cardroom"
     },
     "web": {
       "output": "static",
@@ -53,7 +53,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "cf266b75-da16-4843-bea0-25bd563f9daa"
+        "projectId": "6beddb09-a647-4179-820b-b79513017133"
       }
     }
   }

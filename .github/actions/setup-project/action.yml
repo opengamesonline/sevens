@@ -1,4 +1,4 @@
-name: Set up Sevens
+name: Set up Card Room
 description: Install pinned runtimes, build the game library, and install app dependencies.
 runs:
   using: composite

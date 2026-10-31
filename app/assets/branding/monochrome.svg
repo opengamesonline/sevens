@@ -1,24 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <title>Sevens — seven of spades themed icon mask</title>
+  <title>Card Room — shared table themed icon mask</title>
   <defs>
-    <mask id="cutouts" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
-      <rect width="1024" height="1024" fill="white"/>
-      <g transform="rotate(9 512 512)" fill="black">
-        <rect x="396" y="234" width="342" height="480" rx="44"/>
-      </g>
-    </mask>
-    <mask id="rank" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
-      <rect width="1024" height="1024" fill="white"/>
-      <g transform="rotate(9 512 512)" fill="black">
-        <path d="M452 316H674V372L558 590H486L604 378H452Z"/>
-        <path d="M634 578C626 592 602 604 602 620C602 638 622 646 630 632C630 642 626 650 620 654H648C642 650 638 642 638 632C646 646 666 638 666 620C666 604 642 592 634 578Z"/>
+    <mask id="table" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <circle cx="512" cy="512" r="300" fill="white"/>
+      <g fill="black">
+        <rect x="444" y="258" width="136" height="184" rx="18" transform="rotate(-12 512 350)"/>
+        <g transform="rotate(90 512 512)"><rect x="444" y="258" width="136" height="184" rx="18" transform="rotate(-12 512 350)"/></g>
+        <g transform="rotate(180 512 512)"><rect x="444" y="258" width="136" height="184" rx="18" transform="rotate(-12 512 350)"/></g>
+        <g transform="rotate(270 512 512)"><rect x="444" y="258" width="136" height="184" rx="18" transform="rotate(-12 512 350)"/></g>
       </g>
     </mask>
   </defs>
-  <g mask="url(#cutouts)">
-    <rect x="270" y="298" width="314" height="444" rx="36" fill="white" transform="rotate(-18 512 536)"/>
-  </g>
-  <g mask="url(#rank)">
-    <rect x="404" y="242" width="326" height="464" rx="36" fill="white" transform="rotate(9 512 512)"/>
+  <circle cx="512" cy="512" r="300" fill="white" mask="url(#table)"/>
+  <g fill="white">
+    <g transform="rotate(-12 512 350)"><path d="M512 314C504 328 480 340 480 356C480 374 500 382 508 368C508 378 504 386 498 390H526C520 386 516 378 516 368C524 382 544 374 544 356C544 340 520 328 512 314Z"/></g>
+    <g transform="rotate(90 512 512)"><g transform="rotate(-12 512 350)"><path d="M512 386L484 358C454 326 492 300 512 326C532 300 570 326 540 358Z"/></g></g>
+    <g transform="rotate(180 512 512)"><g transform="rotate(-12 512 350)"><path d="M512 320C488 320 488 345 499 350C472 336 462 374 485 380C496 383 505 376 508 368C508 378 504 386 498 390H526C520 386 516 378 516 368C519 376 528 383 539 380C562 374 552 336 525 350C536 345 536 320 512 320Z"/></g></g>
+    <g transform="rotate(270 512 512)"><g transform="rotate(-12 512 350)"><path d="M512 312L542 350L512 388L482 350Z"/></g></g>
   </g>
 </svg>

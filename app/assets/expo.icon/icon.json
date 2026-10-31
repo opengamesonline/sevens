@@ -6,8 +6,8 @@
     {
       "layers": [
         {
-          "image-name": "sevens.svg",
-          "name": "Sevens card fan"
+          "image-name": "cardroom.svg",
+          "name": "Card Room shared table"
         }
       ],
       "shadow": {

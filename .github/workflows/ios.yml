@@ -44,6 +44,9 @@ jobs:
       - name: Test bridge helpers
         working-directory: app
         run: npm run test:bridge
+      - name: Test app configuration
+        working-directory: app
+        run: npm run test:config
 
   deploy:
     name: Build and submit to TestFlight
@@ -89,12 +92,12 @@ jobs:
           NPM_CONFIG_IGNORE_SCRIPTS: 'true'
         run: >-
           eas build --platform ios --profile production --local --non-interactive
-          --output "${{ runner.temp }}/sevens.ipa"
+          --output "${{ runner.temp }}/cardroom.ipa"
       - name: Save signed binary
         uses: actions/upload-artifact@v7
         with:
-          name: sevens-ios-${{ github.run_number }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/sevens.ipa
+          name: cardroom-ios-${{ github.run_number }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/cardroom.ipa
           if-no-files-found: error
           retention-days: 14
       - name: Submit to TestFlight
@@ -103,4 +106,4 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: >-
           eas submit --platform ios --profile production --non-interactive --wait --no-auto-testflight-setup
-          --path "${{ runner.temp }}/sevens.ipa"
+          --path "${{ runner.temp }}/cardroom.ipa"
