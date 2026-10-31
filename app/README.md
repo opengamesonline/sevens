@@ -1,5 +1,11 @@
 # Sevens App
 
+## Branding
+
+See [branding assets and store checklist](../docs/branding.md). Regenerate the
+logo exports with `npm run branding:generate` and validate them with
+`npm run test:branding`. Native icon/splash changes require a new app build.
+
 ## iOS CI and deployment
 
 See [iOS deployment setup](../docs/ios-deployment.md) for GitHub secrets,

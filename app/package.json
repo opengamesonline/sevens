@@ -39,10 +39,13 @@
     "bonjour-service": "^1.4.4",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.1",
+    "sharp": "^0.35.5",
     "tsx": "^4.23.5",
     "typescript": "~6.0.3"
   },
   "scripts": {
+    "branding:generate": "node scripts/generate-branding.cjs",
+    "test:branding": "node --test scripts/branding.test.cjs",
     "eas-build-pre-install": "cd ../library && bun install --frozen-lockfile && bun run build",
     "start": "expo start --dev-client --lan",
     "bridge": "zsh scripts/emulator-bridge.zsh",
