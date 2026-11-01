@@ -24,7 +24,7 @@ export const sevensHelp = {
       ], explanation: 'Play either the 6 or the 8 of hearts. Each fits next to the 7 of hearts, and both matching spades are already down. Play only one card per turn.' },
     ] },
     { title: 'On your turn', paragraphs: [
-      'Tap a card in your hand, then tap Play selected.',
+      'You can select a card while waiting for your turn. On your turn, tap Play selected to play it; selecting a card does not play it automatically.',
       'Instead of playing a card, you can tap Draw. The player to your right chooses a card to give you. Your turn ends when you receive it. A player who gives away their last card wins the round.',
       'Normally, you can draw even when you have a card to play. The host can turn on Prevent illegal draws to allow drawing only when you cannot play.',
       'The host can also turn on Show playable cards to highlight the cards you can play.',

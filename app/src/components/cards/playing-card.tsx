@@ -41,6 +41,7 @@ export function PlayingCard({
     <Pressable
       accessibilityRole={selectable ? 'button' : undefined}
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={selectable ? { selected } : undefined}
       disabled={!selectable}
       onPress={onPress}
       style={({ pressed }) => [

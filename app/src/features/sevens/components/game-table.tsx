@@ -32,6 +32,8 @@ import {
   type SevensSessionSnapshot,
 } from '@/features/sevens';
 import { selectTablePlayers } from '../selectors';
+import { canSelectHandCard, createCardSelection, createGiveSelection, reconcileCardSelection, reconcileGiveSelection,
+  type CardSelection, type GiveSelection } from '../card-selection';
 
 const handSuitOrder: Record<Suit, number> = {
   [Suit.Spades]: 0,
@@ -96,14 +98,18 @@ export function GameTable({
   onLeave(): void;
 }) {
   const game = snapshot.state;
-  const [selection, setSelection] = useState<{ card: Card; revision: number } | null>(null);
+  const [playSelection, setPlaySelection] = useState<CardSelection | null>(null);
+  const [giveSelection, setGiveSelection] = useState<GiveSelection | null>(null);
   const [boardWidth, setBoardWidth] = useState(0);
   const [drawConfirmation, setDrawConfirmation] = useState<{ revision: number } | null>(null);
   const [leaveConfirming, setLeaveConfirming] = useState(false);
   const [logVisible, setLogVisible] = useState(false);
   const [receipts, setReceipts] = useState<ReceiptTracker | null>(null);
   const logScrollRef = useRef<ScrollView>(null);
-  const selectedCard = selection?.revision === snapshot.revision ? selection.card : null;
+  const validPlaySelection = reconcileCardSelection(playSelection, snapshot);
+  const validGiveSelection = reconcileGiveSelection(giveSelection, snapshot);
+  if (playSelection !== validPlaySelection) setPlaySelection(validPlaySelection);
+  if (giveSelection !== validGiveSelection) setGiveSelection(validGiveSelection);
   const isDrawConfirming = drawConfirmation?.revision === snapshot.revision;
   const visibleLogEntries = game?.moveLog ?? [];
 
@@ -128,6 +134,8 @@ export function GameTable({
   const isCurrentPlayer = isPlayer && game.currentPlayerId === selfId;
   const isDonor = isPlayer && game.pendingDraw?.donorId === selfId;
   const isRequester = isPlayer && game.pendingDraw?.requesterId === selfId;
+  const selectedCard = isDonor ? validGiveSelection?.card ?? null : validPlaySelection?.card ?? null;
+  const canSelectCards = canSelectHandCard(snapshot, actionPending);
   const winnerName = selectParticipantName(snapshot, game.winnerId);
   const leaveWarning =
     game.status === GameStatus.Active
@@ -303,7 +311,8 @@ export function GameTable({
       );
     }
     await onSend(action);
-    setSelection(null);
+    if (action.type === TurnActionType.GiveCard) setGiveSelection(null);
+    else setPlaySelection(null);
   }
 
   const localDisconnected = snapshot.status !== 'connected';
@@ -546,15 +555,17 @@ export function GameTable({
           ) : null}
           <CardHand cards={sortedHand} renderCard={(card) => {
             const selected = selectedCard ? cardEquals(card, selectedCard) : false;
-            const selectable = !actionPending && (isDonor || (isCurrentPlayer && game.pendingDraw === null));
             return (
               <PlayingCard
                 card={card}
                 handSize
                 selected={selected}
-                selectable={selectable}
+                selectable={canSelectCards}
                 playable={shouldPresentCardAsPlayable(showPlayableCards, isDonor, playableKeys.has(cardKey(card)))}
-                onPress={() => setSelection(selected ? null : { card, revision: snapshot.revision })}
+                onPress={() => {
+                  if (isDonor) setGiveSelection(selected ? null : createGiveSelection(snapshot, card));
+                  else setPlaySelection(selected ? null : createCardSelection(snapshot, card));
+                }}
               />
             );
           }} />
