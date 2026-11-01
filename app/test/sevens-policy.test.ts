@@ -20,17 +20,19 @@ import {
   createSevensParticipantMetadata,
   createSevensPolicy,
   type SevensPolicy,
-} from '../src/features/multiplayer/sevens-policy';
-import { SEVENS_BOT_TURN_EVENT } from '../src/features/multiplayer/types';
+} from '../src/features/sevens/sevens-policy';
+import { SEVENS_BOT_TURN_EVENT } from '../src/features/sevens/types';
 import type {
   SevensGameState,
   SevensParticipantMetadata,
-} from '../src/features/multiplayer/types';
+} from '../src/features/sevens/types';
 import {
   isSevensGameState,
   isSevensLobbyMetadata,
+  isSevensParticipantMetadata,
   isTurnAction,
-} from '../src/features/multiplayer/validation';
+} from '../src/features/sevens/validation';
+import { createRecoveryValidator } from '../src/features/card-room/recovery';
 
 function participant(
   id: string,
@@ -45,6 +47,24 @@ const host = participant('host', 'Host', 'spectator', 0);
 const alice = participant('alice', 'Alice', 'player', 1);
 const bob = participant('bob', 'Bob', 'player', 2);
 const carol = participant('carol', 'Carol', 'player', 3);
+
+test('shared recovery validator accepts existing Sevens snapshots and rejects mismatched variants', () => {
+  const participants = [host, alice, bob, carol];
+  const policy = createSevensPolicy({ gameName: 'Recovery table', participantName: host.name, role: 'spectator', maxPlayers: 4,
+    showPlayableCards: true, preventIllegalDraw: false });
+  const metadata = policy.getLobbyMetadata(participants, new Set(participants.map((p) => p.id)));
+  const recovery = {
+    name: 'Recovery table', tableId: 'sevens-table', authorityTerm: 1, hostParticipantId: host.id,
+    hostOrder: participants.map((p) => p.id), participants, connectedParticipantIds: participants.map((p) => p.id),
+    resumeTokens: Object.fromEntries(participants.map((p) => [p.id, 'a-long-enough-resume-token'])),
+    revision: 3, phase: 'started', lobbyMetadata: metadata, state: policy.createInitialState(participants),
+  };
+  const valid = createRecoveryValidator({ isParticipant: isSevensParticipantMetadata, isLobby: isSevensLobbyMetadata,
+    isState: isSevensGameState, stateMatchesLobby: (state, lobby) => state.variant === lobby.variant });
+  const saved = { selfParticipantId: alice.id, recovery };
+  assert.equal(valid(JSON.parse(JSON.stringify(saved))), true);
+  assert.equal(valid({ ...saved, recovery: { ...recovery, state: { ...recovery.state, variant: SevensVariant.Joker } } }), false);
+});
 
 function connected(participants: readonly Participant<SevensParticipantMetadata>[]) {
   return new Set(participants.map(({ id }) => id));

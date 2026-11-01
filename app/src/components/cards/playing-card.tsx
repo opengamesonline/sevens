@@ -41,6 +41,7 @@ export function PlayingCard({
     <Pressable
       accessibilityRole={selectable ? 'button' : undefined}
       accessibilityLabel={accessibilityLabel}
+      accessibilityState={selectable ? { selected } : undefined}
       disabled={!selectable}
       onPress={onPress}
       style={({ pressed }) => [
@@ -68,7 +69,7 @@ export function PlayingCard({
         <>
           <View style={[styles.jokerRail, compact && styles.compactJokerRail]}>
             <Text style={[styles.jokerRailText, compact && styles.compactJokerRailText]}>
-              {compact ? 'JKR' : 'J\nO\nK\nE\nR'}
+              {'J\nO\nK\nE\nR'}
             </Text>
           </View>
           {!compact ? (
@@ -161,7 +162,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textAlign: 'center',
   },
-  compactJokerRailText: { fontSize: 7, lineHeight: 8 },
+  compactJokerRailText: { fontSize: 8, lineHeight: 9 },
   jokerCenter: {
     position: 'absolute',
     alignSelf: 'center',

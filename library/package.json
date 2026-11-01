@@ -1,13 +1,28 @@
 {
   "name": "@opengamesonline/sevens",
   "version": "0.1.0",
-  "description": "Functional game engine for the card game Sevens.",
+  "description": "Functional game engines for Sevens and Hearts.",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "react-native": "./src/index.ts",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./shared": {
+      "types": "./dist/shared/index.d.ts",
+      "react-native": "./src/shared/index.ts",
+      "import": "./dist/shared/index.js"
+    },
+    "./sevens": {
+      "types": "./dist/sevens/index.d.ts",
+      "react-native": "./src/sevens/index.ts",
+      "import": "./dist/sevens/index.js"
+    },
+    "./hearts": {
+      "types": "./dist/hearts/index.d.ts",
+      "react-native": "./src/hearts/index.ts",
+      "import": "./dist/hearts/index.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
@@ -38,6 +53,7 @@
     "cards",
     "game",
     "sevens",
+    "hearts",
     "typescript"
   ],
   "author": "Open Games Online",

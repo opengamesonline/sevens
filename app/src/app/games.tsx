@@ -1,4 +1,3 @@
-import { SevensVariant } from '@opengamesonline/sevens';
 import { router } from 'expo-router';
 import { useEffect, useEffectEvent, useState } from 'react';
 import {
@@ -18,24 +17,25 @@ import {
   ErrorBanner,
   RolePicker,
   RoomButton,
+  RoomInput,
   RoomPanel,
   RoomScreen,
 } from '@/components/room/room-ui';
 import { GameColors } from '@/constants/theme';
-import {
-  useSevensMultiplayer,
-  type SevensDiscoveredGame,
-  type SevensParticipantRole,
-} from '@/features/multiplayer';
+import { useCardRoom } from '@/features/card-room/room-provider';
+import { filterRooms, GAME_INFO, GAME_TYPES, roomDetail, roomGameType, type DiscoveredRoom, type GameType } from '@/features/card-room/registry';
 
 export default function GamesScreen() {
   const insets = useSafeAreaInsets();
-  const { busy, error, games, join, refresh, stop, username } = useSevensMultiplayer();
+  const { busy, error, games, requestJoin, refresh, stop, username } = useCardRoom();
   const stopDiscovery = useEffectEvent(() => {
     void stop();
   });
-  const [selectedGame, setSelectedGame] = useState<SevensDiscoveredGame | null>(null);
-  const [role, setRole] = useState<SevensParticipantRole>('player');
+  const [selectedGame, setSelectedGame] = useState<DiscoveredRoom | null>(null);
+  const [role, setRole] = useState<'player' | 'spectator'>('player');
+  const [filter, setFilter] = useState<GameType | 'all'>('all');
+  const [query, setQuery] = useState('');
+  const visibleGames = filterRooms(games, filter, query);
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => () => stopDiscovery(), []);
@@ -47,7 +47,7 @@ export default function GamesScreen() {
     ? liveSelectedGame.lobbyMetadata.playerCount >= liveSelectedGame.lobbyMetadata.maxPlayers
     : false;
 
-  function openJoin(game: SevensDiscoveredGame) {
+  function openJoin(game: DiscoveredRoom) {
     const full = game.lobbyMetadata.playerCount >= game.lobbyMetadata.maxPlayers;
     setSelectedGame(game);
     setRole(full ? 'spectator' : 'player');
@@ -71,10 +71,11 @@ export default function GamesScreen() {
       return;
     }
     setFormError(null);
-    const joined = await join({ game: currentGame, participantName: cleanName, role });
-    if (joined) {
+    try {
+      await requestJoin({ game: currentGame, participantName: cleanName, role });
       setSelectedGame(null);
-      router.replace('/session');
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : 'Could not open the room');
     }
   }
 
@@ -87,6 +88,11 @@ export default function GamesScreen() {
     <RoomScreen>
       <BrandHeader eyebrow="LOCAL TABLES" title="Nearby Games" />
       <ErrorBanner message={error} />
+      <View style={styles.filters}>{(['all', ...GAME_TYPES] as const).map((type) => (
+        <Pressable key={type} accessibilityRole="button" accessibilityState={{ selected: type === filter }} onPress={() => setFilter(type)}>
+          <Text style={[styles.filter, type === filter && styles.selectedFilter]}>{type === 'all' ? 'All games' : GAME_INFO[type].name}</Text>
+        </Pressable>
+      ))}</View>
 
       <View style={styles.listHeader}>
         <Text style={styles.intro}>Choose a table discovered on this Wi-Fi network.</Text>
@@ -95,7 +101,8 @@ export default function GamesScreen() {
         </Pressable>
       </View>
 
-      {games.length === 0 ? (
+      <RoomInput label="SEARCH ROOMS" value={query} onChangeText={setQuery} placeholder="Room name" maxLength={80} />
+      {visibleGames.length === 0 ? (
         <RoomPanel style={styles.empty}>
           <ActivityIndicator color={GameColors.gold} />
           <Text style={styles.emptyTitle}>Listening for a host</Text>
@@ -104,7 +111,7 @@ export default function GamesScreen() {
           </Text>
         </RoomPanel>
       ) : (
-        games.map((game) => {
+         visibleGames.map((game) => {
           const full = game.lobbyMetadata.playerCount >= game.lobbyMetadata.maxPlayers;
           return (
             <Pressable key={game.serviceId} onPress={() => openJoin(game)}>
@@ -112,7 +119,7 @@ export default function GamesScreen() {
                 <RoomPanel style={pressed ? styles.gamePressed : undefined}>
                   <View style={styles.gameRow}>
                     <View style={styles.gameMark}>
-                      <Text style={styles.gameMarkText}>7</Text>
+                      <Text style={styles.gameMarkText}>{GAME_INFO[roomGameType(game.lobbyMetadata)!].mark}</Text>
                     </View>
                     <View style={styles.gameInfo}>
                       <Text style={styles.gameName}>{game.name}</Text>
@@ -122,9 +129,7 @@ export default function GamesScreen() {
                         {game.lobbyMetadata.spectatorCount} WATCHING
                       </Text>
                       <Text style={styles.hintMeta}>
-                        {game.lobbyMetadata.variant === SevensVariant.Joker ? 'JOKER' : 'STANDARD'}
-                        {' · '}PLAYABLE HINTS{' '}
-                        {game.lobbyMetadata.showPlayableCards ? 'ON' : 'OFF'}
+                        {roomDetail(game.lobbyMetadata)}
                       </Text>
                     </View>
                     <Text style={styles.joinText}>{full ? 'WATCH' : 'JOIN'}</Text>
@@ -183,6 +188,9 @@ export default function GamesScreen() {
 }
 
 const styles = StyleSheet.create({
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
+  filter: { color: GameColors.whiteMuted, paddingVertical: 10, fontWeight: '700' },
+  selectedFilter: { color: GameColors.gold },
   listHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   intro: { flex: 1, color: GameColors.whiteMuted, lineHeight: 20 },
   refresh: { paddingHorizontal: 4, paddingVertical: 8 },

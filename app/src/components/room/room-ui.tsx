@@ -13,7 +13,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { GameColors } from '@/constants/theme';
-import type { SevensParticipantRole } from '@/features/multiplayer';
+type ParticipantRole = 'player' | 'spectator';
 
 export function RoomScreen({ children, scroll = true }: { children: ReactNode; scroll?: boolean }) {
   const content = <View style={styles.content}>{children}</View>;
@@ -117,8 +117,8 @@ export function RolePicker({
   onChange,
   playerDisabled = false,
 }: {
-  value: SevensParticipantRole;
-  onChange(role: SevensParticipantRole): void;
+  value: ParticipantRole;
+  onChange(role: ParticipantRole): void;
   playerDisabled?: boolean;
 }) {
   return (

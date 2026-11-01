@@ -1,6 +1,42 @@
 # @opengamesonline/sevens
 
-A dependency-free, functional TypeScript game engine for the card game Sevens.
+A dependency-free, functional TypeScript library for Sevens and Hearts. The
+existing package name and Sevens root exports are retained for compatibility.
+
+## Organization
+
+- `src/shared/`: card types, deck creation, shuffling and dealing utilities.
+- `src/sevens/`: Sevens rules, scoring, variants and bot strategies.
+- `src/hearts/`: Hearts passing, tricks, scoring, matches and bot strategies.
+- `test/sevens/` and `test/hearts/`: game tests and deterministic simulations.
+
+Subpath exports are available at `@opengamesonline/sevens/shared`,
+`@opengamesonline/sevens/sevens`, and `@opengamesonline/sevens/hearts`.
+Hearts APIs are also exported from the package root.
+
+## Hearts
+
+```ts
+import {
+  initializeHearts, passHeartsCards, getHeartsPlayableCards,
+  playHeartsCard, nextHeartsRound,
+} from "@opengamesonline/sevens/hearts";
+
+const game = initializeHearts(["alice", "bob", "carol", "dave"]);
+// During passing, submit each player's three-card selection with passHeartsCards.
+// Once all four selections arrive, transfers happen simultaneously.
+// During play, getHeartsPlayableCards lists the actor's legal cards;
+// playHeartsCard returns a new state, or null for an illegal move.
+// At roundEnd, nextHeartsRound preserves totals and deals the next hand.
+```
+
+`initializeHearts` and `nextHeartsRound` accept an injected random source for
+deterministic tests. `chooseHeartsBotAction` supports Random/Cautious strategies
+using only the bot's own hand and public trick information. Hearts state is
+serializable and transitions do not mutate their input. At `matchEnd`,
+`winnerIds` contains every player tied for the lowest score.
+
+See [the exact Hearts rules](../docs/hearts.md) for supported conventions.
 
 The package exposes serializable game state and pure state transitions. It does not mutate game objects, hands, boards, or actions supplied by the caller.
 

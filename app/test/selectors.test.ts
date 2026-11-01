@@ -9,9 +9,11 @@ import {
   Rank,
   SevensVariant,
   Suit,
+  TurnActionType,
   createEmptyBoard,
   initializeSevens,
   placeCard,
+  validateTurn,
 } from '@opengamesonline/sevens';
 
 import {
@@ -21,20 +23,24 @@ import {
   selectOwnHand,
   selectPlayableCards,
   selectSuitRuns,
-} from '../src/features/multiplayer/selectors';
+  selectTablePlayers,
+} from '../src/features/sevens/selectors';
 import {
   createSevensParticipantMetadata,
-} from '../src/features/multiplayer/sevens-policy';
+} from '../src/features/sevens/sevens-policy';
 import {
   canAttemptPlay,
   illegalMoveMessage,
   shouldPresentCardAsPlayable,
   sortFinalScores,
-} from '../src/features/multiplayer/presentation';
+} from '../src/features/sevens/presentation';
 import type {
   SevensParticipantMetadata,
   SevensSessionSnapshot,
-} from '../src/features/multiplayer/types';
+} from '../src/features/sevens/types';
+import {
+  canSelectHandCard, createCardSelection, createGiveSelection, reconcileCardSelection, reconcileGiveSelection,
+} from '../src/features/sevens/card-selection';
 
 const participants: Participant<SevensParticipantMetadata>[] = [
   { id: 'alice', name: 'Alice', slot: 0, metadata: createSevensParticipantMetadata('player') },
@@ -113,6 +119,17 @@ test('spectator selector exposes no hand and counts every seated player', () => 
     ['spades', 'diamonds', 'clubs', 'hearts'],
   );
   assert.equal(suitRuns.every(({ cards }) => cards.length === 0), true);
+});
+
+test('table strip includes the local player, current turn and disconnected seats', () => {
+  const current = snapshot(0);
+  const players = selectTablePlayers({ ...current, connectedParticipantIds: ['alice', 'carol', 'watcher'] });
+  assert.equal(players.length, 3);
+  assert.equal(players.find((player) => player.id === 'alice')!.isSelf, true);
+  assert.equal(players.find((player) => player.id === game.currentPlayerId)!.isCurrentPlayer, true);
+  assert.equal(players.find((player) => player.id === 'bob')!.offline, true);
+  assert.ok(selectTablePlayers(snapshot(3)).every((player) => !player.isSelf));
+  assert.ok(players.every((player) => !('hand' in player)));
 });
 
 test('selectors include bot names without exposing a bot as the local hand', () => {
@@ -222,6 +239,74 @@ test('playable-card hints stay visible when it is not your turn', () => {
   };
 
   assert.deepEqual(selectPlayableCards(drawingSnapshot), [tenOfHearts]);
+});
+
+test('a card can be preselected before it is playable and remains selected when the turn changes', () => {
+  const sevenSpades = { suit: Suit.Spades, rank: Rank.Seven } as const;
+  const eightSpades = { suit: Suit.Spades, rank: Rank.Eight } as const;
+  const sevenHearts = { suit: Suit.Hearts, rank: Rank.Seven } as const;
+  const eightHearts = { suit: Suit.Hearts, rank: Rank.Eight } as const;
+  const board = [sevenSpades, sevenHearts].reduce(placeCard, createEmptyBoard());
+  const waiting: SevensSessionSnapshot = { ...snapshot(0), state: { ...game, board, currentPlayerId: 'bob', players: [
+    { id: 'bob', hand: [eightSpades, { suit: Suit.Clubs, rank: Rank.Two }] },
+    { id: 'alice', hand: [eightHearts] },
+    { id: 'carol', hand: [{ suit: Suit.Diamonds, rank: Rank.Two }] },
+  ] } };
+  assert.equal(canSelectHandCard(waiting, false), true);
+  assert.equal(canSelectHandCard(waiting, true), false);
+  assert.deepEqual(selectPlayableCards(waiting), []);
+  const selection = createCardSelection(waiting, eightHearts);
+  assert.ok(selection);
+  assert.equal(validateTurn(waiting.state!, 'alice', { type: TurnActionType.Play, card: eightHearts }), null);
+
+  const nextGame = validateTurn(waiting.state!, 'bob', { type: TurnActionType.Play, card: eightSpades });
+  assert.ok(nextGame);
+  const yourTurn: SevensSessionSnapshot = { ...waiting, revision: waiting.revision + 1, state: { ...waiting.state!, ...nextGame } };
+  assert.equal(yourTurn.state?.currentPlayerId, 'alice');
+  assert.deepEqual(selectPlayableCards(yourTurn), [eightHearts]);
+  assert.equal(reconcileCardSelection(selection, yourTurn), selection);
+  assert.ok(validateTurn(yourTurn.state!, 'alice', { type: TurnActionType.Play, card: eightHearts }));
+});
+
+test('preselection is cleared when the card, player, table or round changes', () => {
+  const current = snapshot(0);
+  const card = current.state!.players[0]!.hand[0]!;
+  const selection = createCardSelection(current, card);
+  assert.ok(selection);
+  assert.equal(createCardSelection(snapshot(3), card), null);
+  assert.equal(canSelectHandCard(snapshot(3), false), false);
+  assert.equal(createCardSelection(current, current.state!.players[1]!.hand[0]!), null);
+
+  const withoutCard = { ...current, revision: current.revision + 1, state: { ...current.state!, players: current.state!.players.map((player) =>
+    player.id === 'alice' ? { ...player, hand: player.hand.slice(1) } : player) } };
+  const cleared = reconcileCardSelection(selection, withoutCard);
+  assert.equal(cleared, null);
+  assert.equal(reconcileCardSelection(cleared, current), null);
+  assert.equal(reconcileCardSelection(selection, { ...current, tableId: 'another-table' }), null);
+  assert.equal(reconcileCardSelection(selection, { ...current, state: { ...current.state!, roundNumber: 2 } }), null);
+  assert.equal(reconcileCardSelection(selection, { ...current, state: { ...current.state!, status: GameStatus.Finished } }), null);
+  assert.equal(reconcileCardSelection(selection, { ...current, self: participants[3]! }), null);
+});
+
+test('a preselected play does not choose a card to give during a draw', () => {
+  const current = snapshot(0);
+  const [first, second] = current.state!.players[0]!.hand;
+  assert.ok(first && second);
+  const playSelection = createCardSelection(current, first);
+  assert.ok(playSelection);
+  assert.equal(createGiveSelection(current, first), null);
+  const draw: SevensSessionSnapshot = { ...current, revision: current.revision + 1,
+    state: { ...current.state!, pendingDraw: { requesterId: 'bob', donorId: 'alice' } } };
+  assert.equal(reconcileCardSelection(playSelection, draw), playSelection);
+  assert.equal(reconcileGiveSelection(null, draw), null);
+  assert.equal(canSelectHandCard(draw, false), true);
+  const giveSelection = createGiveSelection(draw, second);
+  assert.ok(giveSelection);
+  assert.equal(reconcileGiveSelection(giveSelection, { ...draw, revision: draw.revision + 1 }), giveSelection);
+  assert.equal(reconcileGiveSelection(giveSelection, current), null);
+  assert.equal(reconcileGiveSelection(giveSelection, { ...draw, state: { ...draw.state!,
+    pendingDraw: { requesterId: 'carol', donorId: 'alice' } } }), null);
+  assert.equal(reconcileCardSelection(playSelection, current), playSelection);
 });
 
 test('results rank the winner first when a remaining Joker creates a zero-point tie', () => {
