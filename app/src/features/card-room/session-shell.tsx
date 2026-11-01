@@ -6,6 +6,8 @@ import { Alert, BackHandler, Pressable, StyleSheet, Text, View } from 'react-nat
 import { BrandHeader, BusyIndicator, ErrorBanner, RoomButton, RoomPanel, RoomScreen } from '@/components/room/room-ui';
 import { GameColors } from '@/constants/theme';
 import type { LobbyBase, ParticipantBase, StateBase } from './session-types';
+import { GameHelpButton } from './help-ui';
+import type { GameType } from './registry';
 
 type Score = { playerId: string; playerName: string; points: number };
 type Lobby = LobbyBase & { minPlayers: number; maxPlayers: number; roundsPlayed: number; latestScores: Score[]; cumulativeScores: Score[] };
@@ -16,8 +18,8 @@ type Controls<S, P extends JsonValue, L extends JsonValue> = {
 };
 
 export function SessionShell<S extends StateBase, P extends JsonValue & ParticipantBase, L extends JsonValue & Lobby>({
-  controls, gameName, summary, cautiousBotDescription = 'Makes considered moves.', children,
-}: { controls: Controls<S, P, L>; gameName: string; summary: string; cautiousBotDescription?: string; children(onLeave: () => void): ReactNode }) {
+  controls, gameType, gameName, summary, selectedVariant, cautiousBotDescription = 'Makes considered moves.', children,
+}: { controls: Controls<S, P, L>; gameType: GameType; gameName: string; summary: string; selectedVariant?: string; cautiousBotDescription?: string; children(onLeave: () => void): ReactNode }) {
   const { snapshot, busy, error, reconnecting, leave, start, addBot, removeBot, retryConnection, removeDisconnectedParticipant } = controls;
   const [playstyle, setPlaystyle] = useState(BotPlaystyle.Cautious);
   async function leaveSession() { await leave(); router.replace('/'); }
@@ -47,6 +49,7 @@ export function SessionShell<S extends StateBase, P extends JsonValue & Particip
   </RoomScreen>;
   if (snapshot.phase === 'started') return <RoomScreen>
     <ErrorBanner message={snapshot.error ?? error} />
+    <GameHelpButton gameType={gameType} selectedVariant={selectedVariant} gameInProgress />
     {children(confirmLeave)}
   </RoomScreen>;
   const lobby = snapshot.lobbyMetadata;
@@ -70,6 +73,7 @@ export function SessionShell<S extends StateBase, P extends JsonValue & Particip
   return <RoomScreen>
     <BrandHeader eyebrow={`${gameName.toUpperCase()} LOBBY`} title="The Table" />
     <ErrorBanner message={snapshot.error ?? error} />
+    <GameHelpButton gameType={gameType} selectedVariant={selectedVariant} />
     <RoomPanel>
       <Text style={styles.title}>{disconnected ? 'Connection lost' : host ? 'You run this table.' : 'Waiting for the host.'}</Text>
       <Text style={styles.body}>{summary}</Text>

@@ -105,6 +105,7 @@ test('room registry can identify an additional registered game without changing 
     name: 'Other', mark: 'O', description: 'Another game', players: '2 players',
     isLobby: (value: unknown): value is OtherLobby => Boolean(value && typeof value === 'object' && 'appId' in value && value.appId === 'other' && 'gameVersion' in value && value.gameVersion === 1),
     roomDetail: (_lobby: OtherLobby) => 'OTHER',
+    help: { summary: 'Test game', sections: [{ title: 'Rules', paragraphs: ['Play the game.'] }], variants: null },
   } });
   assert.equal(findRoomGame(games, { appId: 'other', gameVersion: 1 }), 'other');
   assert.equal(findRoomGame(games, { appId: 'other', gameVersion: 2 }), null);

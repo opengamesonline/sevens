@@ -12,7 +12,7 @@ import { selectHeartsPlayers } from './selectors';
 
 export default function HeartsSession() {
   const session = useHeartsMultiplayer();
-  return <SessionShell controls={session} gameName="Hearts" cautiousBotDescription="Tries to avoid penalty cards." summary="Exactly four seats. Add bots or wait for friends. Lowest score wins at the 100-point threshold.">
+  return <SessionShell controls={session} gameType="hearts" gameName="Hearts" cautiousBotDescription="Tries to avoid penalty cards." summary="Exactly four seats. Add bots or wait for friends. Lowest score wins at the 100-point threshold.">
     {(onLeave) => <HeartsTable onLeave={onLeave} />}
   </SessionShell>;
 }

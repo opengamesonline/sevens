@@ -7,6 +7,7 @@ export type GameSetupProps = {
   gameName: string;
   participantName: string;
   role: 'player' | 'spectator';
+  onVariantChange?(variant: string): void;
   onCreated(): void;
   onCancel(): void;
 };

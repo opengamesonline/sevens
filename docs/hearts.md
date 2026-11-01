@@ -57,7 +57,9 @@ and browser summary with `defineRoomGame` / `defineRoomGames` in
 `app/src/features/card-room/registry.ts`. Add its provider, creation-options
 component, and session screen to `GAME_ADAPTERS` in `game-adapters.tsx`; the
 shared picker, browser, provider mounting, and session route iterate those
-registrations. Use `createSessionProvider` with the game's own protocol policy,
+registrations. Each game must also provide a help document, with a typed entry
+for every selectable variant; see [the help API](game-help.md). Use
+`createSessionProvider` with the game's own protocol policy,
 recovery validators, and bot adapter. The settings component can render no
 additional options, as Hearts does.
 

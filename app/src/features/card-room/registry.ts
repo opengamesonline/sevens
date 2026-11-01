@@ -6,21 +6,25 @@ import { isHeartsLobbyMetadata } from '../hearts/validation';
 import type { CreateSevensPolicyOptions } from '../sevens/sevens-policy';
 import type { CreateHeartsPolicyOptions } from '../hearts/hearts-policy';
 import { SevensVariant } from '@opengamesonline/sevens';
+import { sevensHelp } from '../sevens/help';
+import { heartsHelp } from '../hearts/help';
+import type { AnyGameHelp, GameHelp } from './help-types';
 
 type GameDefinition<L> = {
   name: string; mark: string; description: string; players: string;
   isLobby(value: unknown): value is L;
   roomDetail(lobby: L): string;
 };
+type GameVariant<O> = 'variant' extends keyof O ? Extract<O extends { variant?: infer V } ? V : never, string> : never;
 /** Bind a game's lobby and creation options to its registration. */
-export function defineRoomGame<L, O>(definition: GameDefinition<L>): GameDefinition<L> & { readonly __options?: O } {
+export function defineRoomGame<L, O>(definition: GameDefinition<L> & { help: GameHelp<GameVariant<O>> }): GameDefinition<L> & { help: GameHelp<GameVariant<O>>; readonly __options?: O } {
   return definition;
 }
 
 /** Register game metadata and protocol validation in one place. */
 export function defineRoomGames<const T extends Record<string, {
   name: string; mark: string; description: string; players: string;
-  isLobby(value: unknown): boolean; roomDetail(lobby: never): string;
+  isLobby(value: unknown): boolean; roomDetail(lobby: never): string; help: AnyGameHelp;
 }>>(games: T): T {
   return games;
 }
@@ -33,9 +37,9 @@ export function findRoomGame<T extends Record<string, { isLobby(value: unknown):
 
 export const GAME_INFO = defineRoomGames({
   sevens: defineRoomGame<SevensLobbyMetadata, CreateSevensPolicyOptions>({ name: 'Sevens', mark: '7♠', description: 'Build every suit from seven.', players: '3–7 players',
-    isLobby: isSevensLobbyMetadata, roomDetail: (lobby) => `SEVENS · ${lobby.variant === SevensVariant.Joker ? 'JOKER' : 'STANDARD'}` }),
+    isLobby: isSevensLobbyMetadata, roomDetail: (lobby) => `SEVENS · ${lobby.variant === SevensVariant.Joker ? 'JOKER' : 'STANDARD'}`, help: sevensHelp }),
   hearts: defineRoomGame<HeartsLobbyMetadata, CreateHeartsPolicyOptions>({ name: 'Hearts', mark: '♥', description: 'Avoid hearts and the queen of spades.', players: '4 players · lowest score wins',
-    isLobby: isHeartsLobbyMetadata, roomDetail: () => 'HEARTS · FIRST TO 100 ENDS THE MATCH' }),
+    isLobby: isHeartsLobbyMetadata, roomDetail: () => 'HEARTS · FIRST TO 100 ENDS THE MATCH', help: heartsHelp }),
 });
 export type GameType = keyof typeof GAME_INFO;
 export type GameOptions<K extends GameType> = NonNullable<(typeof GAME_INFO)[K]['__options']>;

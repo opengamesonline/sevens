@@ -1,7 +1,7 @@
 import { Rank, Suit } from '@opengamesonline/sevens';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PlayingCard } from '@/components/cards/playing-card';
@@ -9,6 +9,7 @@ import { BrandHeader, BusyIndicator, ErrorBanner, RolePicker, RoomButton, RoomIn
 import { GameColors } from '@/constants/theme';
 import { GAME_ADAPTERS } from './game-adapters';
 import { GamePicker } from './game-picker';
+import { HelpLink, HelpSheet } from './help-ui';
 import { useCardRoom } from './room-provider';
 import type { GameType } from './registry';
 
@@ -16,7 +17,9 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const room = useCardRoom();
   const [showCreate, setShowCreate] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [selectedGame, setSelectedGame] = useState<GameType>(room.gameType);
+  const [selectedVariant, setSelectedVariant] = useState<string | undefined>();
   const [gameName, setGameName] = useState('The Green Table');
   const [role, setRole] = useState<'player' | 'spectator'>('player');
   const [usernameError, setUsernameError] = useState<string | null>(null);
@@ -33,12 +36,16 @@ export default function HomeScreen() {
   function openCreate() {
     if (!requireUsername()) return;
     setSelectedGame(room.gameType);
+    setShowHelp(false);
     setShowCreate(true);
   }
   async function listGames() {
     if (requireUsername() && await room.discover()) router.push('/games');
   }
-  function closeCreate() { if (!creating) setShowCreate(false); }
+  function closeCreate() {
+    if (showHelp) { setShowHelp(false); return; }
+    if (!creating) setShowCreate(false);
+  }
 
   return <RoomScreen>
     <BrandHeader eyebrow="BY DRASO LABS" title="Card Room" />
@@ -62,22 +69,24 @@ export default function HomeScreen() {
     <Modal animationType="slide" transparent visible={showCreate} onRequestClose={closeCreate}>
       <View style={styles.modalBackdrop}>
         <Pressable style={StyleSheet.absoluteFill} onPress={closeCreate} />
-        <KeyboardAwareScrollView style={styles.modalSheet} contentContainerStyle={styles.modalSheetContent}
+        <KeyboardAwareScrollView style={[styles.modalSheet, showHelp && styles.hidden]} contentContainerStyle={styles.modalSheetContent}
           keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} bottomOffset={16}>
           <View style={[styles.modalCard, { paddingBottom: Math.max(22, insets.bottom + 16) }]}>
             <View style={styles.modalHandle} />
             <Text style={styles.modalEyebrow}>OPEN A TABLE</Text>
             <Text style={styles.modalTitle}>Create room</Text>
             <Text style={styles.fieldLabel}>GAME</Text>
-            <GamePicker value={selectedGame} onChange={setSelectedGame} disabled={creating} />
+            <GamePicker value={selectedGame} onChange={(game) => { if (game !== selectedGame) { setSelectedGame(game); setSelectedVariant(undefined); } }} disabled={creating} />
+            <HelpLink gameType={selectedGame} disabled={creating} onPress={() => { Keyboard.dismiss(); setShowHelp(true); }} />
             <RoomInput label="LOBBY NAME" value={gameName} onChangeText={setGameName} maxLength={40} placeholder="The Green Table" editable={!creating} />
             <View style={styles.setup} pointerEvents={creating ? 'none' : 'auto'}>
               <RolePicker value={role} onChange={setRole} />
-              <Setup gameName={gameName} participantName={room.username} role={role} onCancel={closeCreate}
+              <Setup gameName={gameName} participantName={room.username} role={role} onCancel={closeCreate} onVariantChange={setSelectedVariant}
                 onCreated={() => { setShowCreate(false); router.push('/session'); }} />
             </View>
           </View>
         </KeyboardAwareScrollView>
+        {showHelp ? <HelpSheet gameType={selectedGame} selectedVariant={selectedVariant} onClose={() => setShowHelp(false)} /> : null}
       </View>
     </Modal>
   </RoomScreen>;
@@ -93,6 +102,7 @@ const styles = StyleSheet.create({
   footer: { color: GameColors.whiteMuted, fontSize: 10, letterSpacing: 2, textAlign: 'center' },
   modalBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,18,14,0.74)' },
   modalSheet: { width: '100%', maxHeight: '100%' }, modalSheetContent: { flexGrow: 1, justifyContent: 'flex-end' },
+  hidden: { display: 'none' },
   modalCard: { width: '100%', maxWidth: 720, alignSelf: 'center', borderTopLeftRadius: 28, borderTopRightRadius: 28,
     backgroundColor: GameColors.panelSolid, borderColor: GameColors.border, borderWidth: 1, padding: 20, gap: 14 },
   modalHandle: { width: 44, height: 4, borderRadius: 2, backgroundColor: GameColors.whiteMuted, opacity: 0.45, alignSelf: 'center' },

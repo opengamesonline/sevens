@@ -1,15 +1,13 @@
 import { SevensVariant } from '@opengamesonline/sevens';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { GameColors } from '@/constants/theme';
 import { CreateActions, type GameSetupProps } from '../card-room/create-actions';
 import { MAX_SEVENS_PLAYERS, MIN_SEVENS_PLAYERS } from './types';
 import { useSevensMultiplayer } from './session-provider';
+import { sevensHelp } from './help';
 
-const variants = [
-  { value: SevensVariant.Standard, label: 'Standard', description: 'Classic 52-card game.' },
-  { value: SevensVariant.Joker, label: 'Joker', description: 'One Joker enables bridge plays.' },
-] as const;
+const variants = (Object.keys(sevensHelp.variants) as SevensVariant[]).map((value) => ({ value, ...sevensHelp.variants[value] }));
 
 export function SevensCreateOptions(props: GameSetupProps) {
   const session = useSevensMultiplayer();
@@ -17,6 +15,8 @@ export function SevensCreateOptions(props: GameSetupProps) {
   const [maxPlayers, setMaxPlayers] = useState(4);
   const [showPlayableCards, setShowPlayableCards] = useState(false);
   const [preventIllegalDraw, setPreventIllegalDraw] = useState(false);
+  const { onVariantChange } = props;
+  useEffect(() => { onVariantChange?.(variant); }, [onVariantChange, variant]);
   return <>
     <View style={styles.field}>
       <Text style={styles.label}>VARIANT</Text>
